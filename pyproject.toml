@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "neuroviz-lab"
+version = "0.1.0"
+description = "Run small ML models step by step and see what happens to the data."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [{ name = "Hamza Ali" }]
+keywords = ["machine-learning", "visualization", "education", "numpy", "autograd"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Education",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Visualization",
+]
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4", "jsonschema>=4.18", "scikit-learn>=1.3", "build>=1.0"]
+
+[project.scripts]
+nvzlab = "nvzlab.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hamzaali/neuroviz-lab"
+Changelog = "https://github.com/hamzaali/neuroviz-lab/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nvzlab"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/nvzlab", "README.md", "LICENSE", "CHANGELOG.md", "examples", "scripts", "tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests", "examples", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "N"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
