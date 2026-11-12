@@ -17,14 +17,15 @@ pip install neuroviz-lab
 ```python
 import nvzlab as nvz
 
-tr = nvz.trace("logistic_regression", kind="train")  # forward, loss, backward, update
-print(tr)  # step-by-step summary
-tr.save("run.json")  # the full trace, ready for a viewer
+tr = nvz.show("logistic_regression")  # opens the step-by-step viewer
+tr = nvz.show("logistic_regression", samples="batch", kind="train")  # forward, loss, backward, update
+tr.save("run.html")  # one self-contained page; "run.json" for the raw trace
 ```
 
-`nvz.list_models()`, `nvz.list_datasets()` and `nvz.list_ops()` show what is built in.
-The interactive HTML viewer (`nvz.show(...)`, `tr.save("run.html")`) arrives in the next
-release step.
+`nvz.show` displays inline in Jupyter and opens the browser from a script. Step with
+←/→, play with space, click any number to see where it came from and the arithmetic
+that produced it. `nvz.list_models()`, `nvz.list_datasets()` and `nvz.list_ops()` show
+what is built in.
 
 ## Bring your own model
 
@@ -71,7 +72,20 @@ tr.save("my_model.json")
 
 ```bash
 nvzlab list
-nvzlab demo logistic_regression --kind train --json run.json
+nvzlab demo logistic_regression --kind train --samples batch   # opens the viewer
+nvzlab demo logistic_regression --json run.json                # raw trace instead
+nvzlab open run.json                                           # view a saved trace
+```
+
+## Development
+
+The viewer lives in `frontend/` (Vite, React, TypeScript, KaTeX) and builds into
+`src/nvzlab/viewer/static/`, which is committed so `pip install` needs no Node.
+
+```bash
+cd frontend && npm install
+npm run dev        # live viewer on frontend/dev/sample-trace.json
+npm run typecheck && npm run build
 ```
 
 ## License

@@ -12,4 +12,5 @@
 - Trace schema v0 (`nvzlab.trace/0`), deterministic JSON serializer, `Trace.save`/`Trace.load`.
 - `blobs` synthetic dataset (1 or 2 features).
 - Built-in `logistic_regression` model with pretrained and initial weights.
-- CLI: `nvzlab list`, `nvzlab demo <model> --json out.json`.
+- CLI: `nvzlab list`, `nvzlab demo <model>` (opens the viewer; `--json`/`--html` to write a file), `nvzlab open trace.json`.
+- Interactive 2D viewer (`nvz.show`, `Trace.show`, `Trace.save("x.html")`): single self-contained HTML page; step list grouped by iteration and tinted by phase, playback with speed and keyboard control, matrix grids with heatmap tint, op cards with KaTeX formulas and shape rules, worked arithmetic for any selected cell (forward, loss, backward, update), inspector with full tensor values, and a logistic-regression scene (decision boundary or sigmoid curve) that moves with the parameters.
