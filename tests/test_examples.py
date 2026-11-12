@@ -34,7 +34,9 @@ def test_readme_quickstart_runs(tmp_path, monkeypatch):
     readme = (Path(__file__).parents[1] / "README.md").read_text()
     block = readme.split("## Quickstart")[1].split("```python")[1].split("```")[0]
     assert len([line for line in block.strip().splitlines() if line.strip()]) <= 5
+    opened = []
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
     monkeypatch.chdir(tmp_path)
     exec(compile(block, "README quickstart", "exec"), {})
-    assert (tmp_path / "run.json").exists()
-    assert os.path.getsize(tmp_path / "run.json") > 0
+    assert len(opened) == 2
+    assert os.path.getsize(tmp_path / "run.html") > 0

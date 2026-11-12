@@ -45,14 +45,8 @@ def test_save_load_roundtrip(tmp_path):
     assert back.summary() == tr.summary()
 
 
-def test_save_html_and_show_not_yet(tmp_path):
+def test_save_rejects_unknown_extension(tmp_path):
     tr = nvz.trace("logistic_regression")
-    with pytest.raises(NotImplementedError, match="HTML viewer arrives in the next release step"):
-        tr.save(tmp_path / "run.html")
-    with pytest.raises(NotImplementedError, match="HTML viewer arrives in the next release step"):
-        tr.show()
-    with pytest.raises(NotImplementedError, match="HTML viewer arrives in the next release step"):
-        nvz.show("logistic_regression")
     with pytest.raises(ValueError, match="unsupported extension '.txt'"):
         tr.save(tmp_path / "run.txt")
 
