@@ -15,7 +15,7 @@ _OPS: dict[str, Op] = {}
 def register(op: Op) -> Op:
     """Register ``op`` under its name. Built-in names cannot be overwritten."""
     existing = _OPS.get(op.name)
-    if existing is not None and existing.category == "builtin" and op is not existing:
+    if existing is not None and existing.origin == "builtin" and op is not existing:
         raise NvzError(
             f"{op.name!r} is a built-in op and cannot be replaced. "
             f"Fix: pick another name, e.g. @nvz.op(name='my_{op.name}')."

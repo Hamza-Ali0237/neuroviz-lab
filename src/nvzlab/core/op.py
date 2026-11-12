@@ -45,10 +45,14 @@ class Op:
 
     name: str = ""
     category: str = "custom"
+    backward_formula: str | None = None
+    backward_text: str | None = None
 
     def __init__(self) -> None:
         if not self.name:
             raise ValueError(f"{type(self).__name__} must define a class attribute `name`.")
+        if not hasattr(self, "origin"):
+            self.origin = _origin(type(self).__module__)
         registry.register(self)
 
     # --- API for subclasses -------------------------------------------------------------
@@ -65,6 +69,22 @@ class Op:
     ) -> Explanation | None:
         """Return ``{"title", "formula", "text", "shape_rule"}`` or ``None`` (opaque op)."""
         return None
+
+    def explain_backward(
+        self, attrs: dict[str, Any], in_shapes: list[tuple[int, ...]], out_shape: tuple[int, ...]
+    ) -> Explanation | None:
+        """Explanation of the backward rule, built from ``backward_formula``/``backward_text``.
+
+        ``None`` when neither is set, so the viewer never shows an invented chain rule.
+        """
+        if self.backward_formula is None and self.backward_text is None:
+            return None
+        return {
+            "title": f"{self.name} (backward)",
+            "formula": self.backward_formula,
+            "text": self.backward_text,
+            "shape_rule": "each gradient has the shape of the input it belongs to",
+        }
 
     @property
     def differentiable(self) -> bool:
@@ -90,6 +110,10 @@ class Op:
         return f"<op {self.name} ({self.category}{tag})>"
 
 
+def _origin(module: str) -> str:
+    return "builtin" if module.startswith("nvzlab.") else "user"
+
+
 class FunctionOp(Op):
     """An op built from a plain function by ``@nvz.op``."""
 
@@ -101,12 +125,17 @@ class FunctionOp(Op):
         formula: str | None,
         text: str | None,
         shape_rule: str | None,
+        backward_formula: str | None = None,
+        backward_text: str | None = None,
     ) -> None:
         self.name = name
         self.category = category
         self.formula = formula
         self.text = text
         self.shape_rule = shape_rule
+        self.backward_formula = backward_formula
+        self.backward_text = backward_text
+        self.origin = _origin(fn.__module__)
         self._fn = fn
         self._bwd: Callable[..., Any] | None = None
         self.__doc__ = fn.__doc__
@@ -164,12 +193,16 @@ def op(
     formula: str | None = None,
     text: str | None = None,
     shape_rule: str | None = None,
+    backward_formula: str | None = None,
+    backward_text: str | None = None,
 ) -> Any:
     """Turn a plain NumPy function into a recordable op.
 
     Without a ``.backward`` rule the op is non-differentiable: the backward pass stops at
     it and the trace says so. Without ``formula`` and ``text`` the op is opaque: it is
-    rendered with its name, shapes and values only.
+    rendered with its name, shapes and values only. ``backward_formula`` and
+    ``backward_text`` describe the backward rule in terms of the upstream gradient ``g``;
+    without them backward nodes carry no explanation.
 
     Examples
     --------
@@ -186,6 +219,15 @@ def op(
     """
 
     def wrap(f: Callable[..., np.ndarray]) -> FunctionOp:
-        return FunctionOp(f, name or f.__name__, category, formula, text, shape_rule)
+        return FunctionOp(
+            f,
+            name or f.__name__,
+            category,
+            formula,
+            text,
+            shape_rule,
+            backward_formula,
+            backward_text,
+        )
 
     return wrap(fn) if fn is not None else wrap

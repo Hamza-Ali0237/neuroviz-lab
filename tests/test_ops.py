@@ -86,7 +86,7 @@ def test_mean_and_sum(rng):
 def test_every_builtin_op_is_documented():
     for name in nvz.list_ops():
         o = nvz.core.registry.get(name)
-        if o.category != "builtin":
+        if o.origin != "builtin":
             continue
         e = o.explain({}, [], ())
         assert e and e["formula"] and e["text"] and e["shape_rule"], name
@@ -97,3 +97,20 @@ def test_ops_run_as_plain_numpy_outside_tape():
     out = ops.sigmoid(ops.linear(np.array([[1.0, 2.0]]), np.array([0.5, -0.5]), np.array([0.0])))
     assert isinstance(out, np.ndarray) and out.dtype == np.float64
     assert nvz.core.tape.current_tape() is None
+
+
+def test_tanh(rng):
+    x = rng.normal(size=(2, 3)) * 3
+    np.testing.assert_allclose(ops.tanh(x), np.tanh(x))
+    gradcheck(ops.tanh, [x])
+
+
+def test_mul_broadcast(rng):
+    a, b = rng.normal(size=(3, 4)), rng.normal(size=4)
+    np.testing.assert_allclose(ops.mul(a, b), a * b)
+    gradcheck(ops.mul, [a, b])
+    gradcheck(ops.mul, [a, rng.normal(size=(3, 1))])
+    gradcheck(ops.mul, [rng.normal(size=(1, 4)), rng.normal(size=(3, 1))])
+    gradcheck(ops.mul, [a, np.array(2.0)])
+    with pytest.raises(ShapeError, match="mul: expected shapes that broadcast"):
+        ops.mul(a, rng.normal(size=3))

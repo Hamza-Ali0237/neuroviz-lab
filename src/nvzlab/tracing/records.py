@@ -49,6 +49,7 @@ class Node:
     id: str
     op: str
     category: str
+    origin: str
     phase: str
     inputs: list[str]
     outputs: list[str]

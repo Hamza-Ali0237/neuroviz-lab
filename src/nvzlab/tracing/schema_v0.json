@@ -90,11 +90,12 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "op", "category", "phase", "inputs", "outputs", "attrs", "step", "forward_of", "differentiable", "explain"],
+        "required": ["id", "op", "category", "origin", "phase", "inputs", "outputs", "attrs", "step", "forward_of", "differentiable", "explain"],
         "properties": {
           "id": { "type": "string", "pattern": "^n[0-9]+$" },
           "op": { "type": "string" },
           "category": { "type": "string" },
+          "origin": { "enum": ["builtin", "user"] },
           "phase": { "$ref": "#/$defs/phase" },
           "inputs": { "type": "array", "items": { "$ref": "#/$defs/tensor_id" } },
           "outputs": { "type": "array", "items": { "$ref": "#/$defs/tensor_id" } },

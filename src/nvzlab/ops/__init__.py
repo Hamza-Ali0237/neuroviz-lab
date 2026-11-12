@@ -8,8 +8,8 @@ Examples
 array([0.37754067])
 """
 
-from nvzlab.ops.activations import relu, sigmoid, softmax
-from nvzlab.ops.linalg import add, linear, matmul
+from nvzlab.ops.activations import relu, sigmoid, softmax, tanh
+from nvzlab.ops.linalg import add, linear, matmul, mul
 from nvzlab.ops.losses import bce, cross_entropy
 from nvzlab.ops.reduce import mean, sum
 
@@ -20,8 +20,10 @@ __all__ = [
     "linear",
     "matmul",
     "mean",
+    "mul",
     "relu",
     "sigmoid",
     "softmax",
     "sum",
+    "tanh",
 ]

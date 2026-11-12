@@ -11,7 +11,7 @@ EPS = 1e-12
 
 
 @op(
-    category="builtin",
+    category="loss",
     formula=r"L = -\frac{1}{n}\sum_i \left[ y_i \log p_i + (1 - y_i) \log(1 - p_i) \right]",
     text=(
         "Binary cross-entropy: how surprised the model is by the true labels, averaged "
@@ -19,6 +19,12 @@ EPS = 1e-12
         "stability."
     ),
     shape_rule="p and y share a shape -> scalar",
+    backward_formula=r"\frac{\partial L}{\partial p} = g \cdot \frac{p - y}{n\,p(1-p)}",
+    backward_text=(
+        "The loss starts the backward pass, so g is 1. Each probability's gradient points "
+        "away from its label and grows as p approaches the wrong extreme; labels get no "
+        "gradient."
+    ),
 )
 def bce(p: np.ndarray, y: np.ndarray) -> np.ndarray:
     """Mean binary cross-entropy between probabilities ``p`` and labels ``y`` (0 or 1).
@@ -49,7 +55,7 @@ def _(grad, p, y, out):
 
 
 @op(
-    category="builtin",
+    category="loss",
     formula=r"L = -\frac{1}{n}\sum_i \log \mathrm{softmax}(z_i)_{y_i}",
     text=(
         "Cross-entropy from raw scores (logits): applies softmax and takes the negative "
@@ -57,6 +63,14 @@ def _(grad, p, y, out):
         "log-sum-exp for stability."
     ),
     shape_rule="logits (n, C) and labels (n,) class indices or (n, C) one-hot -> scalar",
+    backward_formula=(
+        r"\frac{\partial L}{\partial z} = g \cdot "
+        r"\frac{\mathrm{softmax}(z) - \mathrm{onehot}(y)}{n}"
+    ),
+    backward_text=(
+        "Softmax and cross-entropy cancel into a simple rule: predicted probabilities minus "
+        "the one-hot labels, divided by the number of samples. Labels get no gradient."
+    ),
 )
 def cross_entropy(logits: np.ndarray, y: np.ndarray) -> np.ndarray:
     """Mean softmax cross-entropy from logits.

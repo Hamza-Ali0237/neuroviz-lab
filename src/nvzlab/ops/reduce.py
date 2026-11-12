@@ -25,10 +25,14 @@ def _spread(grad: np.ndarray, x: np.ndarray, axis: int | None) -> np.ndarray:
 
 
 @op(
-    category="builtin",
+    category="reduce",
     formula=r"\bar{x} = \frac{1}{n}\sum_i x_i",
     text="Average of the values (over everything, or along one axis).",
     shape_rule="(...) -> scalar, or the input shape with `axis` removed",
+    backward_formula=r"\frac{\partial L}{\partial x_i} = \frac{g}{n}",
+    backward_text=(
+        "Every averaged element receives an equal share g / n of the upstream gradient."
+    ),
 )
 def mean(x: np.ndarray, axis: int | None = None) -> np.ndarray:
     """Arithmetic mean.
@@ -50,10 +54,12 @@ def _(grad, x, out, axis=None):
 
 
 @op(
-    category="builtin",
+    category="reduce",
     formula=r"s = \sum_i x_i",
     text="Sum of the values (over everything, or along one axis).",
     shape_rule="(...) -> scalar, or the input shape with `axis` removed",
+    backward_formula=r"\frac{\partial L}{\partial x_i} = g",
+    backward_text="Every summed element receives a copy of the upstream gradient g.",
 )
 def sum(x: np.ndarray, axis: int | None = None) -> np.ndarray:  # noqa: A001
     """Sum of elements.
