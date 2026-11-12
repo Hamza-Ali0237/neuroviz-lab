@@ -136,22 +136,26 @@ class Trace:
         return serializer.to_json(self.to_dict())
 
     def save(self, path: str | Path) -> Path:
-        """Write the trace; the format follows the extension (``.json`` now, ``.html`` later).
+        """Write the trace; ``.json`` for the raw trace, ``.html`` for a self-contained viewer.
 
         Examples
         --------
         >>> tr = nvz.trace("logistic_regression")  # doctest: +SKIP
         >>> tr.save("run.json")  # doctest: +SKIP
+        >>> tr.save("run.html")  # doctest: +SKIP
         """
         path = Path(path)
         if path.suffix == ".json":
             path.write_text(self.to_json(), encoding="utf-8")
             return path
         if path.suffix == ".html":
-            raise NotImplementedError("HTML viewer arrives in the next release step")
+            from nvzlab import viewer
+
+            path.write_text(viewer.to_html(self), encoding="utf-8")
+            return path
         raise ValueError(
             f"Trace.save: unsupported extension {path.suffix!r} for {str(path)!r}. "
-            "Fix: use '.json' (or '.html' once the viewer ships)."
+            "Fix: use '.json' (raw trace) or '.html' (interactive viewer)."
         )
 
     @classmethod
@@ -192,9 +196,20 @@ class Trace:
         """
         return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
-    def show(self, dim: str = "2d") -> None:
-        """Open the interactive viewer (next release step)."""
-        raise NotImplementedError("HTML viewer arrives in the next release step")
+    def show(self, dim: str = "2d") -> Path | None:
+        """Open the interactive viewer: inline in Jupyter, otherwise in the browser.
+
+        Returns the path of the written HTML file outside a notebook.
+
+        Examples
+        --------
+        >>> nvz.trace("logistic_regression").show()  # doctest: +SKIP
+        """
+        if dim not in ("2d", "3d"):
+            raise ValueError(f"dim must be '2d' or '3d', received {dim!r}.")
+        from nvzlab import viewer
+
+        return viewer.show(self)
 
     # --- inspection -----------------------------------------------------------------
     def summary(self) -> str:

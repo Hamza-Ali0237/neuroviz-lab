@@ -38,9 +38,11 @@ Changelog = "https://github.com/hamzaali/neuroviz-lab/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nvzlab"]
+artifacts = ["src/nvzlab/viewer/static/*", "src/nvzlab/weights/*.npz"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/nvzlab", "README.md", "LICENSE", "CHANGELOG.md", "examples", "scripts", "tests"]
+include = ["src/nvzlab", "README.md", "LICENSE", "CHANGELOG.md", "examples", "scripts", "tests", "frontend"]
+exclude = ["frontend/node_modules"]
 
 [tool.ruff]
 line-length = 100

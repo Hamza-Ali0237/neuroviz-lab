@@ -184,14 +184,20 @@ def trace(
 
 
 def show(model: Any, x: Any = None, y: Any = None, **options: Any) -> Trace:
-    """Trace ``model`` and open the interactive viewer (viewer arrives in the next release step).
+    """Trace ``model`` and open the interactive viewer; same signature as :func:`trace`.
+
+    Inline in Jupyter, otherwise in the default browser. Returns the trace so you can keep
+    working with it (``tr.save("run.html")``).
 
     Examples
     --------
     >>> import nvzlab as nvz
-    >>> nvz.show("logistic_regression")  # doctest: +SKIP
+    >>> tr = nvz.show("logistic_regression")  # doctest: +SKIP
+    >>> tr = nvz.show("logistic_regression", samples="batch", kind="train")  # doctest: +SKIP
     """
-    raise NotImplementedError("HTML viewer arrives in the next release step")
+    tr = trace(model, x, y, **options)
+    tr.show(dim=options.get("dim", "2d"))
+    return tr
 
 
 def _choice(option: str, value: Any, valid: tuple[str, ...]) -> None:

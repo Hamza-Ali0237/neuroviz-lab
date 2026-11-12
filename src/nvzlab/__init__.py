@@ -9,7 +9,7 @@ Examples
 
 __version__ = "0.1.0"
 
-from nvzlab import datasets, models, ops  # noqa: E402
+from nvzlab import datasets, models, ops, viewer  # noqa: E402
 from nvzlab.api import show, trace  # noqa: E402
 from nvzlab.core.op import Op, op  # noqa: E402
 from nvzlab.core.registry import names as _op_names  # noqa: E402
@@ -48,4 +48,5 @@ __all__ = [
     "show",
     "step",
     "trace",
+    "viewer",
 ]
