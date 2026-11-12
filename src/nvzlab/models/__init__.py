@@ -1,0 +1,15 @@
+"""Built-in models and the ``Model`` base class.
+
+Examples
+--------
+>>> import nvzlab as nvz
+>>> m = nvz.models.load("logistic_regression", features=2)
+>>> sorted(m.params)
+['b', 'w']
+"""
+
+from nvzlab.models.base import Model
+from nvzlab.models.logistic_regression import LogisticRegression
+from nvzlab.models.registry import list_models, load
+
+__all__ = ["LogisticRegression", "Model", "list_models", "load"]
