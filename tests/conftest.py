@@ -5,7 +5,7 @@ import jsonschema
 import numpy as np
 import pytest
 
-SCHEMA = json.loads((Path(__file__).parents[1] / "src/nvzlab/trace/schema_v0.json").read_text())
+SCHEMA = json.loads((Path(__file__).parents[1] / "src/nvzlab/tracing/schema_v0.json").read_text())
 VALIDATOR = jsonschema.Draft202012Validator(SCHEMA)
 
 

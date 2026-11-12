@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from nvzlab.core.errors import NvzError
-from nvzlab.trace.records import SCHEMA, Event, Node, Step, Tensor, Trace
+from nvzlab.tracing.records import SCHEMA, Event, Node, Step, Tensor, Trace
 
 if TYPE_CHECKING:
     from nvzlab.core.op import Op

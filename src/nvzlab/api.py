@@ -12,7 +12,7 @@ from nvzlab.core.tape import Tape
 from nvzlab.models.base import Model
 from nvzlab.models.registry import load as load_model
 from nvzlab.ops import bce, cross_entropy
-from nvzlab.trace.records import Trace
+from nvzlab.tracing.records import Trace
 
 _LOSSES: dict[str, Callable[..., np.ndarray]] = {"bce": bce, "cross_entropy": cross_entropy}
 _BATCH = 4

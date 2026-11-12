@@ -9,7 +9,7 @@ from typing import Any
 
 import numpy as np
 
-from nvzlab.trace import serializer
+from nvzlab.tracing import serializer
 
 SCHEMA = "nvzlab.trace/0"
 

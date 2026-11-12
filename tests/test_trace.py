@@ -5,7 +5,7 @@ import pytest
 
 import nvzlab as nvz
 from conftest import validate
-from nvzlab.trace.serializer import decode_array, encode_array
+from nvzlab.tracing.serializer import decode_array, encode_array
 
 CASES = [
     dict(kind=k, samples=s, features=f)
