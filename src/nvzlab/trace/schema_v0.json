@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neuroviz-lab.dev/schema/nvzlab.trace/0",
+  "title": "nvzlab trace v0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "run_id", "kind", "model", "dataset", "mode", "tensors", "nodes", "events", "steps", "meta"],
+  "properties": {
+    "schema": { "const": "nvzlab.trace/0" },
+    "run_id": { "type": "string", "minLength": 1 },
+    "kind": { "enum": ["predict", "train"] },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "family", "provenance", "architecture"],
+      "properties": {
+        "name": { "type": "string" },
+        "family": { "type": "string" },
+        "provenance": { "enum": ["builtin-pretrained", "builtin-initial", "user"] },
+        "architecture": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "op", "params"],
+            "properties": {
+              "id": { "type": "string" },
+              "label": { "type": "string" },
+              "op": { "type": "string" },
+              "params": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "dataset": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "features", "classes"],
+          "properties": {
+            "name": { "type": "string" },
+            "features": { "type": "array", "items": { "type": "string" } },
+            "classes": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+    "mode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["samples", "n_samples", "n_features"],
+      "properties": {
+        "samples": { "enum": ["single", "batch"] },
+        "n_samples": { "type": "integer", "minimum": 1 },
+        "n_features": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tensors": {
+      "type": "object",
+      "propertyNames": { "pattern": "^t[0-9]+$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["shape", "dtype", "role", "name", "stats", "data", "truncated"],
+        "properties": {
+          "shape": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
+          "dtype": { "const": "float32" },
+          "role": { "enum": ["input", "param", "activation", "output", "grad", "loss", "label"] },
+          "name": { "type": ["string", "null"] },
+          "stats": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["min", "max", "mean"],
+            "properties": {
+              "min": { "type": "number" },
+              "max": { "type": "number" },
+              "mean": { "type": "number" }
+            }
+          },
+          "data": { "type": ["string", "null"] },
+          "truncated": { "type": "boolean" }
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "op", "category", "phase", "inputs", "outputs", "attrs", "step", "forward_of", "differentiable", "explain"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^n[0-9]+$" },
+          "op": { "type": "string" },
+          "category": { "type": "string" },
+          "phase": { "$ref": "#/$defs/phase" },
+          "inputs": { "type": "array", "items": { "$ref": "#/$defs/tensor_id" } },
+          "outputs": { "type": "array", "items": { "$ref": "#/$defs/tensor_id" } },
+          "attrs": { "type": "object" },
+          "step": { "type": "integer", "minimum": 0 },
+          "forward_of": { "type": ["string", "null"] },
+          "differentiable": { "type": "boolean" },
+          "explain": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["title", "formula", "text", "shape_rule"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "formula": { "type": ["string", "null"] },
+                  "text": { "type": ["string", "null"] },
+                  "shape_rule": { "type": ["string", "null"] }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind", "phase", "step", "payload", "refs"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^e[0-9]+$" },
+          "kind": { "type": "string" },
+          "phase": { "$ref": "#/$defs/phase" },
+          "step": { "type": "integer", "minimum": 0 },
+          "payload": { "type": "object" },
+          "refs": { "type": "array", "items": { "$ref": "#/$defs/tensor_id" } }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["index", "title", "phase", "nodes", "events", "iteration"],
+        "properties": {
+          "index": { "type": "integer", "minimum": 0 },
+          "title": { "type": "string" },
+          "phase": { "$ref": "#/$defs/phase" },
+          "nodes": { "type": "array", "items": { "type": "string" } },
+          "events": { "type": "array", "items": { "type": "string" } },
+          "iteration": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["nvzlab_version", "seed"],
+      "properties": {
+        "nvzlab_version": { "type": "string" },
+        "seed": { "type": "integer" }
+      }
+    }
+  },
+  "$defs": {
+    "phase": { "enum": ["forward", "loss", "backward", "update"] },
+    "tensor_id": { "type": "string", "pattern": "^t[0-9]+$" }
+  }
+}
