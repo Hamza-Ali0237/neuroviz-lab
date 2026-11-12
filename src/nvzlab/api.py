@@ -157,7 +157,7 @@ def trace(
             if kind == "predict":
                 break
             tape.phase = "loss"
-            with tape.step("Loss"):
+            with tape.step("Loss", backward_title="Gradient of the loss"):
                 loss_val = loss_fn(out, y)
             loss_id = tape.tensor_id(loss_val)
             if loss_id is None:

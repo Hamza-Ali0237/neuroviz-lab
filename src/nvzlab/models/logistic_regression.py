@@ -42,9 +42,9 @@ class LogisticRegression(Model):
             )
         with step("Input"):
             event("input", {"n_samples": int(x.shape[0]), "n_features": int(x.shape[1])}, refs=[x])
-        with step("Weighted sum z = Xw + b"):
+        with step("Weighted sum z = Xw + b", backward_title="Gradients reach w and b"):
             z = ops.linear(x, p["w"], p["b"])
-        with step("Sigmoid"):
+        with step("Sigmoid", backward_title="Gradient through the sigmoid"):
             prob = ops.sigmoid(z)
         with step("Prediction"):
             event(

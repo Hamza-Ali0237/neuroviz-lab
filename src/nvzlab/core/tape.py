@@ -56,6 +56,7 @@ class Tape:
         self._refs: list[Any] = []  # keep arrays alive so ids are never reused
         self._ctx: dict[str, Any] = {}  # node id -> backward context
         self._ops: dict[str, Op] = {}
+        self._backward_titles: dict[int, str] = {}  # forward step index -> backward title
         self._step_stack: list[Step] = []
         self._token: contextvars.Token | None = None
         self.did_backward = False
@@ -106,9 +107,15 @@ class Tape:
 
     # --- steps and events ----------------------------------------------------------
     @contextmanager
-    def step(self, title: str) -> Iterator[Step]:
-        """Group everything recorded inside into one playback step."""
+    def step(self, title: str, backward_title: str | None = None) -> Iterator[Step]:
+        """Group everything recorded inside into one playback step.
+
+        ``backward_title`` names the mirrored backward step (default
+        ``"Backprop through: <title>"``).
+        """
         s = self._new_step(title)
+        if backward_title is not None:
+            self._backward_titles[s.index] = backward_title
         self._step_stack.append(s)
         try:
             yield s
@@ -148,6 +155,7 @@ class Tape:
             id=f"n{len(self.nodes)}",
             op=op.name,
             category=op.category,
+            origin=op.origin,
             phase=self.phase,
             inputs=list(in_ids),
             outputs=[out_id],
@@ -166,9 +174,10 @@ class Tape:
     def backward(self, loss: Any, param_names: Sequence[str] = ()) -> dict[str, np.ndarray]:
         """Reverse-mode backward from ``loss`` over every recorded node.
 
-        Returns gradients keyed by tensor id, plus by name for named tensors. The backward
-        pass is grouped into two steps: the gradient of the loss, then the gradients that
-        reach the inputs and parameters.
+        Returns gradients keyed by tensor id, plus by name for named tensors. Backward
+        steps mirror, in reverse order, the forward steps of the current iteration whose
+        nodes receive a gradient. When a tensor fed several ops, a ``grad_accumulate``
+        node sums the partial gradients so fan-in stays visible.
         """
         loss_id = self.tensor_id(loss)
         if loss_id is None or not any(loss_id in n.outputs for n in self.nodes):
@@ -184,17 +193,31 @@ class Tape:
                 grads[loss_id], role="grad", name="grad_" + (self.tensors[loss_id].name or "loss")
             )
         }
-        loss_nodes = [n for n in self.nodes if n.phase == "loss"]
-        other_nodes = [n for n in self.nodes if n.phase != "loss" and n.phase != "backward"]
-        names = [self.tensors[t].name for t in self.tensors if self.tensors[t].role == "param"]
-        names = [n for n in dict.fromkeys(names) if n] or ["the inputs"]
-        reach = "Gradients reach " + (
-            ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]
-        )
-        for title, group in (("Gradient of the loss", loss_nodes), (reach, other_nodes)):
-            with self.step(title):
-                for node in reversed(group):
-                    self._backward_node(node, grads, grad_ids)
+        partials: dict[str, list[str]] = {loss_id: [grad_ids[loss_id]]}
+        todo = [
+            n
+            for n in self.nodes
+            if n.phase in ("forward", "loss") and self.steps[n.step].iteration == self.iteration
+        ]
+        # Global reverse order keeps the chain rule correct; a new backward step opens
+        # whenever the forward step changes, so each forward step gets its mirror.
+        current: Step | None = None
+        for node in reversed(todo):
+            if node.outputs[0] not in partials:
+                continue
+            if current is None or current.index != node.step:
+                if current is not None:
+                    self._step_stack.pop()
+                current = self.steps[node.step]
+                fwd = current
+                title = self._backward_titles.get(fwd.index, f"Backprop through: {fwd.title}")
+                self._step_stack.append(self._new_step(title))
+            self._backward_node(node, grads, grad_ids, partials)
+        for tid, ids in list(partials.items()):
+            if len(ids) > 1:  # leaves (inputs, params) with fan-in
+                self._accumulate(tid, grads, grad_ids, partials)
+        if current is not None:
+            self._step_stack.pop()
         out = {tid: g for tid, g in grads.items()}
         for tid, g in grads.items():
             name = self.tensors[tid].name
@@ -202,12 +225,55 @@ class Tape:
                 out[name] = g
         return out
 
+    def _accumulate(
+        self,
+        tid: str,
+        grads: dict[str, np.ndarray],
+        grad_ids: dict[str, str],
+        partials: dict[str, list[str]],
+    ) -> None:
+        """Sum the partial gradients of ``tid`` into one tensor via a ``grad_accumulate`` node."""
+        ids = partials[tid]
+        if len(ids) < 2:
+            return
+        total = np.sum([self.tensors[g].array for g in ids], axis=0)
+        name = self.tensors[tid].name
+        total_id = self.watch(total, role="grad", name=f"grad_{name}" if name else None)
+        step = self._current_step("grad_accumulate")
+        node = Node(
+            id=f"n{len(self.nodes)}",
+            op="grad_accumulate",
+            category="reduce",
+            origin="builtin",
+            phase="backward",
+            inputs=list(ids),
+            outputs=[total_id],
+            attrs={"grad_of": [tid]},
+            step=step.index,
+            forward_of=None,
+            differentiable=True,
+            explain={
+                "title": "Accumulate gradients",
+                "formula": r"\frac{\partial L}{\partial x} = \sum_k g_k",
+                "text": "Every path that used this value sends a gradient back; they add up.",
+                "shape_rule": "all partial gradients share the tensor's shape",
+            },
+        )
+        self.nodes.append(node)
+        step.nodes.append(node.id)
+        grads[tid] = total
+        grad_ids[tid] = total_id
+        partials[tid] = [total_id]
+
     def _backward_node(
-        self, node: Node, grads: dict[str, np.ndarray], grad_ids: dict[str, str]
+        self,
+        node: Node,
+        grads: dict[str, np.ndarray],
+        grad_ids: dict[str, str],
+        partials: dict[str, list[str]],
     ) -> None:
         out_id = node.outputs[0]
-        if out_id not in grads:
-            return
+        self._accumulate(out_id, grads, grad_ids, partials)
         op = self._ops[node.id]
         if not op.differentiable:
             self.event(
@@ -234,19 +300,15 @@ class Tape:
             gid = self.watch(g, role="grad", name=f"grad_{fwd_name}" if fwd_name else None)
             new_ids.append(gid)
             grad_of.append(tid)
-            if tid in grads:
-                total = grads[tid] + g
-                grads[tid] = total
-                grad_ids[tid] = self.watch(
-                    total, role="grad", name=f"grad_{fwd_name}" if fwd_name else None
-                )
-            else:
-                grads[tid] = g
-                grad_ids[tid] = gid
+            partials.setdefault(tid, []).append(gid)
+            grads[tid] = g if tid not in grads else grads[tid] + g
+            grad_ids[tid] = gid
+        in_shapes = [self.tensors[t].shape for t in node.inputs]
         bnode = Node(
             id=f"n{len(self.nodes)}",
             op=node.op,
             category=node.category,
+            origin=node.origin,
             phase="backward",
             inputs=[grad_ids[out_id], *node.inputs],
             outputs=new_ids,
@@ -254,7 +316,7 @@ class Tape:
             step=step.index,
             forward_of=node.id,
             differentiable=True,
-            explain=None,
+            explain=op.explain_backward(dict(node.attrs), in_shapes, self.tensors[out_id].shape),
         )
         self.nodes.append(bnode)
         step.nodes.append(bnode.id)
@@ -368,22 +430,25 @@ def _jsonable(attrs: dict[str, Any]) -> dict[str, Any]:
 
 
 @contextmanager
-def step(title: str) -> Iterator[None]:
+def step(title: str, backward_title: str | None = None) -> Iterator[None]:
     """Group the ops and events inside into one playback step (no-op outside a tape).
+
+    In train traces each forward step gets a mirrored backward step titled
+    ``backward_title`` (default ``"Backprop through: <title>"``).
 
     Examples
     --------
     >>> import nvzlab as nvz
     >>> from nvzlab import ops
     >>> def model(x, p):
-    ...     with nvz.step("Weighted sum"):
+    ...     with nvz.step("Weighted sum", backward_title="Gradients reach w and b"):
     ...         return ops.linear(x, p["w"], p["b"])
     """
     tape = current_tape()
     if tape is None:
         yield
         return
-    with tape.step(title):
+    with tape.step(title, backward_title):
         yield
 
 
