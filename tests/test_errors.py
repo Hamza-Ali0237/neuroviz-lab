@@ -19,7 +19,9 @@ def test_unknown_dataset_and_op():
         nvz.datasets.load("blob")
     with pytest.raises(UnknownNameError, match="Unknown op 'sigmod'. Did you mean 'sigmoid'"):
         nvz.core.registry.get("sigmod")
-    with pytest.raises(UnknownNameError, match="Available models: 'logistic_regression'"):
+    with pytest.raises(
+        UnknownNameError, match="Available models: 'decision_tree', 'logistic_regression', 'mlp'"
+    ):
         nvz.models.load("zzz")
 
 
@@ -89,3 +91,28 @@ def test_user_model_needs_x_and_traced_output():
         NvzError, match="logistic_regression: expected x with shape \\(n_samples, 2\\)"
     ):
         nvz.trace("logistic_regression", np.ones((1, 3)))
+
+
+def test_unsupported_mlp_and_tree_options_list_valid_ones():
+    with pytest.raises(NvzError, match="mlp: features=1 is not supported. Valid values: 2."):
+        nvz.trace("mlp", features=1)
+    with pytest.raises(NvzError, match=r"mlp: expected x with shape \(n_samples, 2\)"):
+        nvz.trace("mlp", np.ones((1, 3)))
+    with pytest.raises(
+        NvzError, match="decision_tree: criterion='mse' is not supported. Valid values: 'gini'"
+    ):
+        nvz.trace("decision_tree", criterion="mse")
+    with pytest.raises(
+        NvzError, match="decision_tree: dataset='iris' is not supported. Valid values: 'blobs'"
+    ):
+        nvz.trace("decision_tree", dataset="iris")
+    with pytest.raises(NvzError, match="decision_tree: features=3 is not supported"):
+        nvz.trace("decision_tree", features=3)
+    with pytest.raises(NvzError, match="dataset='moons' has 2 features, received features=1"):
+        nvz.trace("decision_tree", dataset="moons", features=1)
+    with pytest.raises(NvzError, match="learns from the whole dataset, so samples='single'"):
+        nvz.trace("decision_tree", kind="train", samples="single")
+    with pytest.raises(NvzError, match="kind='train' needs labels"):
+        nvz.trace("decision_tree", np.ones((3, 2)), kind="train")
+    with pytest.raises(NvzError, match="moons: features must be 2"):
+        nvz.datasets.load("moons", features=1)

@@ -6,9 +6,15 @@ from typing import Any
 
 from nvzlab.core.errors import unknown_name
 from nvzlab.models.base import Model
+from nvzlab.models.decision_tree import DecisionTree
 from nvzlab.models.logistic_regression import LogisticRegression
+from nvzlab.models.mlp import MLP
 
-_MODELS: dict[str, type[Model]] = {"logistic_regression": LogisticRegression}
+_MODELS: dict[str, type[Model]] = {
+    "decision_tree": DecisionTree,
+    "logistic_regression": LogisticRegression,
+    "mlp": MLP,
+}
 
 
 def load(name: str, **options: Any) -> Model:
@@ -24,6 +30,20 @@ def load(name: str, **options: Any) -> Model:
     return _MODELS[name](**options)
 
 
-def list_models() -> list[str]:
-    """Names of the built-in models."""
-    return sorted(_MODELS)
+def list_models() -> dict[str, str]:
+    """Built-in model names with a one-line description and the options each supports.
+
+    Examples
+    --------
+    >>> import nvzlab as nvz
+    >>> sorted(nvz.list_models())
+    ['decision_tree', 'logistic_regression', 'mlp']
+    >>> print(nvz.list_models()["mlp"])  # doctest: +SKIP
+    """
+    out = {}
+    for name, cls in sorted(_MODELS.items()):
+        options = "; ".join(
+            f"{k}: {', '.join(str(v) for v in vals)}" for k, vals in cls.supports.items()
+        )
+        out[name] = f"{cls.description} [{options}]"
+    return out

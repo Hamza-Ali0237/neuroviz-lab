@@ -11,10 +11,14 @@ from nvzlab.core.errors import NvzError
 from nvzlab.core.tape import Tape
 from nvzlab.models.base import Model
 from nvzlab.models.registry import load as load_model
-from nvzlab.ops import bce, cross_entropy
+from nvzlab.ops import bce, cross_entropy, nll
 from nvzlab.tracing.records import Trace
 
-_LOSSES: dict[str, Callable[..., np.ndarray]] = {"bce": bce, "cross_entropy": cross_entropy}
+_LOSSES: dict[str, Callable[..., np.ndarray]] = {
+    "bce": bce,
+    "cross_entropy": cross_entropy,
+    "nll": nll,
+}
 _BATCH = 4
 
 
@@ -69,19 +73,32 @@ def trace(
         )
 
     forward: Callable[..., np.ndarray]
+    self_trained = False  # the model records its own (non-gradient) training
     if isinstance(model, Model):
         if samples is not None:
             model.check_option("samples", samples)
         forward, name, family = model.forward, model.name, model.family
+        self_trained = kind == "train" and model.trains_itself
         if params is None:
             params = (
-                model.initial_params if kind == "train" and model.initial_params else model.params
+                model.initial_params
+                if kind == "train" and model.initial_params is not None
+                else model.params
             )
         if loss is None:
             loss = model.loss
         dataset = model.dataset
         if x is None and dataset is not None:
-            x, y_default = dataset.sample(_BATCH if samples == "batch" else 1)
+            if self_trained:
+                if samples == "single":
+                    raise NvzError(
+                        f"{name}: kind='train' learns from the whole dataset, so "
+                        "samples='single' does not apply. Fix: drop `samples` or use "
+                        "kind='predict' to follow one sample."
+                    )
+                x, y_default = dataset.X, dataset.y
+            else:
+                x, y_default = dataset.sample(_BATCH if samples == "batch" else 1)
             y = y_default if y is None else y
         dataset_info = dataset.to_dict() if dataset is not None else None
     elif callable(model):
@@ -119,6 +136,8 @@ def trace(
                 "kind='train' needs labels. Fix: pass y (one label per sample), e.g. "
                 "nvz.trace(model, x, y, params=p, kind='train', loss='bce')."
             )
+        y = np.asarray(y, dtype=np.float64)
+    if kind == "train" and not self_trained:
         if loss is None:
             raise NvzError(
                 "kind='train' needs a loss. Fix: pass loss='bce' (probabilities, 0/1 labels), "
@@ -133,7 +152,6 @@ def trace(
             loss_fn = _LOSSES[loss]
         else:
             loss_fn = loss
-        y = np.asarray(y, dtype=np.float64)
 
     with Tape(name=name) as tape:
         tape.watch(x, role="input", name="x")
@@ -141,7 +159,11 @@ def trace(
             tape.watch(y, role="label", name="y")
         for k, v in params.items():
             tape.watch(v, role="param", name=k)
-        for it in range(iterations if kind == "train" else 1):
+        if self_trained:
+            tape.phase = "update"
+            for it in model.train(x, y, iterations):
+                tape.iteration = it
+        for it in range(0 if self_trained else iterations if kind == "train" else 1):
             tape.iteration = it
             tape.phase = "forward"
             out = forward(x, params)

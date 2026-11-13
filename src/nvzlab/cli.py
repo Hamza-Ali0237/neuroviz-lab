@@ -27,7 +27,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "list":
-            print("models:   " + ", ".join(nvz.list_models()))
+            models = nvz.list_models()
+            print("models:   " + ", ".join(models))
+            for name, line in models.items():
+                print(f"  {name}: {line}")
             print("datasets: " + ", ".join(nvz.list_datasets()))
             print("ops:      " + ", ".join(nvz.list_ops()))
             return 0

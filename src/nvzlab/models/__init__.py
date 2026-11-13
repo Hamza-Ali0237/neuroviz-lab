@@ -9,7 +9,9 @@ Examples
 """
 
 from nvzlab.models.base import Model
+from nvzlab.models.decision_tree import DecisionTree
 from nvzlab.models.logistic_regression import LogisticRegression
+from nvzlab.models.mlp import MLP
 from nvzlab.models.registry import list_models, load
 
-__all__ = ["LogisticRegression", "Model", "list_models", "load"]
+__all__ = ["MLP", "DecisionTree", "LogisticRegression", "Model", "list_models", "load"]

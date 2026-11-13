@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import numpy as np
@@ -31,6 +32,7 @@ class Model:
 
     name: str = "model"
     family: str = "custom"
+    description: str = ""
     supports: dict[str, tuple[Any, ...]] = {"samples": ("single", "batch")}
     params: dict[str, np.ndarray]
     initial_params: dict[str, np.ndarray] | None = None
@@ -43,6 +45,20 @@ class Model:
     def __call__(self, x: np.ndarray, params: dict[str, np.ndarray] | None = None) -> np.ndarray:
         return self.forward(x, self.params if params is None else params)
 
+    def train(self, x: np.ndarray, y: np.ndarray, iterations: int) -> Iterator[int]:
+        """Optional non-gradient training (e.g. growing a tree), recorded with steps and events.
+
+        A generator that yields the iteration index before recording each iteration, so
+        ``nvz.trace`` can label the steps. Models that do not override it are trained by
+        forward, loss, backward and SGD updates.
+        """
+        raise NotImplementedError
+
+    @property
+    def trains_itself(self) -> bool:
+        """Whether :meth:`train` is overridden."""
+        return type(self).train is not Model.train
+
     def check_option(self, option: str, value: Any) -> None:
         """Raise a clear error if ``option=value`` is not supported by this model."""
         valid = self.supports.get(option)
@@ -54,7 +70,7 @@ class Model:
 
     def describe(self) -> str:
         """A short human-readable description (name, params, dataset, loss, options)."""
-        lines = [f"{self.name} ({self.family})"]
+        lines = [f"{self.name} ({self.family}): {self.description}".rstrip(": ")]
         lines += [f"  param {k}: shape {tuple(v.shape)}" for k, v in self.params.items()]
         if self.dataset is not None:
             lines.append(f"  dataset: {self.dataset.name} {self.dataset.X.shape}")
