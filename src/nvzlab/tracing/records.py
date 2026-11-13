@@ -84,6 +84,7 @@ class Step:
     nodes: list[str] = field(default_factory=list)
     events: list[str] = field(default_factory=list)
     iteration: int = 0
+    layer: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return dict(self.__dict__)
@@ -222,6 +223,7 @@ class Trace:
             f"tensors={len(self.tensors)} nodes={len(self.nodes)} events={len(self.events)}"
         )
         rows = []
+        layered = any(s.layer for s in self.steps)
         for s in self.steps:
             parts = []
             for nid in s.nodes:
@@ -237,15 +239,18 @@ class Trace:
                 if self.kind == "train" and self.meta.get("iterations", 1) > 1
                 else ""
             )
-            rows.append((str(s.index), s.phase + it, s.title, "; ".join(parts) or "-"))
-        widths = [max(len(r[i]) for r in rows + [("#", "phase", "step", "ops")]) for i in range(3)]
-        lines = [
-            head,
-            "  ".join(
-                h.ljust(w) for h, w in zip(("#", "phase", "step", "ops"), widths + [0], strict=True)
-            ),
+            row = [str(s.index), s.phase + it, s.title, "; ".join(parts) or "-"]
+            if layered:
+                row.insert(2, s.layer or "")
+            rows.append(row)
+        header = ["#", "phase", "step", "ops"]
+        if layered:
+            header.insert(2, "layer")
+        widths = [max(len(r[i]) for r in rows + [header]) for i in range(len(header) - 1)] + [0]
+        lines = [head] + [
+            "  ".join(c.ljust(w) for c, w in zip(r, widths, strict=True)).rstrip()
+            for r in [header, *rows]
         ]
-        lines += ["  ".join(c.ljust(w) for c, w in zip(r, widths + [0], strict=True)) for r in rows]
         return "\n".join(lines)
 
     def __repr__(self) -> str:

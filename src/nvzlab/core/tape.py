@@ -107,13 +107,16 @@ class Tape:
 
     # --- steps and events ----------------------------------------------------------
     @contextmanager
-    def step(self, title: str, backward_title: str | None = None) -> Iterator[Step]:
+    def step(
+        self, title: str, backward_title: str | None = None, layer: str | None = None
+    ) -> Iterator[Step]:
         """Group everything recorded inside into one playback step.
 
         ``backward_title`` names the mirrored backward step (default
-        ``"Backprop through: <title>"``).
+        ``"Backprop through: <title>"``); ``layer`` labels the step's layer (e.g.
+        ``"Hidden layer 1"``) and is copied onto the mirrored backward step.
         """
-        s = self._new_step(title)
+        s = self._new_step(title, layer)
         if backward_title is not None:
             self._backward_titles[s.index] = backward_title
         self._step_stack.append(s)
@@ -122,8 +125,8 @@ class Tape:
         finally:
             self._step_stack.pop()
 
-    def _new_step(self, title: str) -> Step:
-        s = Step(len(self.steps), title, self.phase, iteration=self.iteration)
+    def _new_step(self, title: str, layer: str | None = None) -> Step:
+        s = Step(len(self.steps), title, self.phase, iteration=self.iteration, layer=layer)
         self.steps.append(s)
         return s
 
@@ -211,7 +214,7 @@ class Tape:
                 current = self.steps[node.step]
                 fwd = current
                 title = self._backward_titles.get(fwd.index, f"Backprop through: {fwd.title}")
-                self._step_stack.append(self._new_step(title))
+                self._step_stack.append(self._new_step(title, fwd.layer))
             self._backward_node(node, grads, grad_ids, partials)
         for tid, ids in list(partials.items()):
             if len(ids) > 1:  # leaves (inputs, params) with fan-in
@@ -430,25 +433,29 @@ def _jsonable(attrs: dict[str, Any]) -> dict[str, Any]:
 
 
 @contextmanager
-def step(title: str, backward_title: str | None = None) -> Iterator[None]:
+def step(
+    title: str, backward_title: str | None = None, layer: str | None = None
+) -> Iterator[None]:
     """Group the ops and events inside into one playback step (no-op outside a tape).
 
     In train traces each forward step gets a mirrored backward step titled
-    ``backward_title`` (default ``"Backprop through: <title>"``).
+    ``backward_title`` (default ``"Backprop through: <title>"``). ``layer`` is an optional
+    label (e.g. ``"Hidden layer 1"``) stored on the step and its mirror, so renderers can
+    group steps into layers.
 
     Examples
     --------
     >>> import nvzlab as nvz
     >>> from nvzlab import ops
     >>> def model(x, p):
-    ...     with nvz.step("Weighted sum", backward_title="Gradients reach w and b"):
+    ...     with nvz.step("Weighted sum", backward_title="Gradients reach w and b", layer="Output"):
     ...         return ops.linear(x, p["w"], p["b"])
     """
     tape = current_tape()
     if tape is None:
         yield
         return
-    with tape.step(title, backward_title):
+    with tape.step(title, backward_title, layer):
         yield
 
 
