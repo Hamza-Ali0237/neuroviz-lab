@@ -8,29 +8,67 @@ from conftest import validate
 from nvzlab.tracing.serializer import decode_array, encode_array
 
 CASES = [
-    dict(kind=k, samples=s, features=f)
+    dict(model="logistic_regression", kind=k, samples=s, features=f)
     for k in ("predict", "train")
     for s in ("single", "batch")
     for f in (1, 2)
 ]
+CASES += [
+    dict(model="mlp", kind=k, samples=s) for k in ("predict", "train") for s in ("single", "batch")
+]
+CASES += [
+    dict(model="decision_tree", kind="predict", samples=s, dataset=d, features=f, criterion=c)
+    for s in ("single", "batch")
+    for d, f in (("blobs", 1), ("blobs", 2), ("moons", 2))
+    for c in ("gini", "entropy")
+]
+CASES += [
+    dict(model="decision_tree", kind="train", dataset=d, features=f, criterion=c, iterations=i)
+    for d, f in (("blobs", 1), ("blobs", 2), ("moons", 2))
+    for c in ("gini", "entropy")
+    for i in (1, 2, 3)
+]
 
 
-@pytest.mark.parametrize(
-    "case", CASES, ids=lambda c: f"{c['kind']}-{c['samples']}-f{c['features']}"
-)
+def _case_id(c):
+    return "-".join(str(v) for v in c.values())
+
+
+@pytest.mark.parametrize("case", CASES, ids=_case_id)
 def test_schema_valid_for_builtin(case):
-    tr = nvz.trace("logistic_regression", **case)
+    case = dict(case)
+    model = case.pop("model")
+    tr = nvz.trace(model, **case)
     validate(tr)
-    assert tr.mode["samples"] == case["samples"] and tr.mode["n_features"] == case["features"]
+    assert tr.kind == case["kind"] and tr.model["name"] == model
+    if "samples" in case:
+        assert tr.mode["samples"] == case["samples"]
+    else:  # a self-trained model learns from the whole dataset
+        assert tr.mode == {"samples": "batch", "n_samples": 120, "n_features": case["features"]}
+    assert tr.mode["n_features"] == case.get("features", 2)
     assert tr.model["provenance"] == (
         "builtin-pretrained" if case["kind"] == "predict" else "builtin-initial"
     )
-    assert tr.dataset["name"] == "blobs" and len(tr.dataset["features"]) == case["features"]
+    assert tr.dataset["name"] == case.get("dataset", "moons" if model == "mlp" else "blobs")
+    assert len(tr.dataset["features"]) == tr.mode["n_features"]
+    assert tr.steps and all(s.layer is None or isinstance(s.layer, str) for s in tr.steps)
 
 
-def test_determinism():
-    a = nvz.trace("logistic_regression", kind="train", samples="batch", iterations=3).to_json()
-    b = nvz.trace("logistic_regression", kind="train", samples="batch", iterations=3).to_json()
+@pytest.mark.parametrize(
+    "call",
+    [
+        dict(model="logistic_regression", kind="train", samples="batch", iterations=3),
+        dict(model="mlp", kind="train", samples="batch", iterations=3),
+        dict(model="decision_tree", kind="train", dataset="moons", iterations=3),
+        dict(model="decision_tree", kind="predict", samples="batch", criterion="entropy"),
+    ],
+    ids=_case_id,
+)
+def test_determinism(call):
+    call = dict(call)
+    model = call.pop("model")
+    a = nvz.trace(model, **call).to_json()
+    b = nvz.trace(model, **call).to_json()
     assert a == b
     assert json.dumps(json.loads(a), sort_keys=True, separators=(",", ":")) == a  # keys sorted
 
@@ -76,6 +114,19 @@ def test_stats_rounded_and_tensor_roles():
         for v in t.stats.values():
             assert v == float(f"{v:.6g}")
         assert t.truncated is False and t.array is not None
+
+
+def test_step_layer_round_trips_and_shows_in_summary(tmp_path):
+    tr = nvz.trace("mlp", kind="train")
+    layers = {s.title: s.layer for s in tr.steps}
+    assert layers["Weighted sum"] == "Hidden layer" and layers["Input"] is None
+    d = tr.to_dict()
+    assert all("layer" in s for s in d["steps"])
+    assert nvz.Trace.load(tr.save(tmp_path / "mlp.json")).steps[1].layer == "Hidden layer"
+    lines = tr.summary().splitlines()
+    assert lines[1].split() == ["#", "phase", "layer", "step", "ops"]
+    assert "Hidden layer  Weighted sum" in lines[3]
+    assert "layer" not in nvz.trace("logistic_regression").summary().splitlines()[1]
 
 
 def test_summary_and_repr():
