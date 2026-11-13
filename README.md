@@ -27,6 +27,16 @@ tr.save("run.html")  # one self-contained page; "run.json" for the raw trace
 that produced it. `nvz.list_models()`, `nvz.list_datasets()` and `nvz.list_ops()` show
 what is built in.
 
+Built-in models: `logistic_regression` (on `blobs`, 1 or 2 features), `mlp` (2 → 4 ReLU → 2
+softmax on `moons`, steps grouped into layers) and `decision_tree` (depth 3, Gini or entropy,
+`dataset="blobs"` or `"moons"`; a train trace grows the tree one level per iteration and
+records every candidate split).
+
+```python
+nvz.show("mlp", kind="train", samples="batch")
+nvz.show("decision_tree", kind="train", dataset="moons", criterion="entropy", iterations=2)
+```
+
 ## Bring your own model
 
 A model is an ordinary Python function on NumPy arrays. Build it from `nvz.ops` and it runs
