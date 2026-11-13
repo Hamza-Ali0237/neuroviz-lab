@@ -64,7 +64,25 @@ def blobs(features: int = 2, seed: int = 0) -> Dataset:
     return Dataset("blobs", x, y, [f"x{i + 1}" for i in range(features)], ["0", "1"])
 
 
-_DATASETS = {"blobs": blobs}
+def moons(features: int = 2, seed: int = 0) -> Dataset:
+    """Two interleaving half circles, 120 rows, 2 features; not linearly separable."""
+    if features != 2:
+        raise NvzError(f"moons: features must be 2, received {features!r}.")
+    rng = np.random.default_rng(seed)
+    n = 60
+    t = np.linspace(0.0, np.pi, n)
+    outer = np.stack([np.cos(t), np.sin(t)], axis=1)
+    inner = np.stack([1.0 - np.cos(t), 1.0 - np.sin(t) - 0.5], axis=1)
+    x = np.concatenate([outer, inner]) + rng.normal(0.0, 0.12, size=(2 * n, 2))
+    y = np.repeat([0, 1], n)
+    order = rng.permutation(2 * n)
+    x, y = x[order], y[order]
+    x.setflags(write=False)
+    y.setflags(write=False)
+    return Dataset("moons", x, y, ["x1", "x2"], ["0", "1"])
+
+
+_DATASETS = {"blobs": blobs, "moons": moons}
 
 
 def load(name: str, **options: int) -> Dataset:
