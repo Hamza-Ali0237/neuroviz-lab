@@ -1,5 +1,6 @@
 import { useAppState, useDispatch } from "../state/store";
 import type { StepRecord } from "../trace/types";
+import { eventSummary } from "../format";
 
 export function StepList() {
   const { trace, stepIndex } = useAppState();
@@ -24,7 +25,7 @@ export function StepList() {
                   <span className="nvz-step-title">{s.title}</span>
                   <span className="nvz-step-ops">
                     {s.nodes.map((id) => trace.node(id).op).join(", ") ||
-                      s.events.map((id) => trace.event(id).kind).join(", ")}
+                      eventSummary(s.events.map((id) => trace.event(id).kind))}
                   </span>
                 </button>
               </li>

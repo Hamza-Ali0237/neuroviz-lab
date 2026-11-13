@@ -89,6 +89,28 @@ export class TraceView {
     return (this.raw.steps[i]?.events ?? []).map((id) => this.event(id));
   }
 
+  /** A context tensor by name (role `context`, drawn faded, never computed), or null. */
+  context(name: string): Tensor | null {
+    for (const t of this.tensors.values()) if (t.role === "context" && t.name === name) return t;
+    return null;
+  }
+
+  /** The first tensor with a role (e.g. the input `x` or the labels `y`), or null. */
+  byRole(role: TensorRecord["role"], name?: string): Tensor | null {
+    for (const t of this.tensors.values()) if (t.role === role && (name === undefined || t.name === name)) return t;
+    return null;
+  }
+
+  /** Output tensors of the forward steps, in step order (for the generic 3D view). */
+  forwardOutputs(): { step: number; tensor: Tensor }[] {
+    const out: { step: number; tensor: Tensor }[] = [];
+    for (const s of this.raw.steps) {
+      if (s.phase !== "forward") continue;
+      for (const nid of s.nodes) for (const tid of this.node(nid).outputs) out.push({ step: s.index, tensor: this.tensor(tid) });
+    }
+    return out;
+  }
+
   /** The node that produced a tensor, or null for leaves (inputs, params, labels). */
   producer(tensorId: string): NodeRecord | null {
     return this.producerOf.get(tensorId) ?? null;

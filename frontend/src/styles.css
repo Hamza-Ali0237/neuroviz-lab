@@ -185,3 +185,42 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   .nvz-scene2d { grid-template-columns: 1fr; }
   .nvz-side { position: static; width: 100%; }
 }
+
+/* Slim inspector rail when nothing is selected; the centre gets the width. */
+.nvz-app.nvz-rail { grid-template-columns: 260px minmax(0, 1fr) 56px; }
+.nvz-inspector-rail { padding: 14px 8px; writing-mode: vertical-rl; text-align: left; }
+.nvz-inspector-rail h2 { margin: 0 0 12px; }
+.nvz-inspector-rail p { font-size: 12px; margin: 0; }
+.nvz-inspector h2 .nvz-link { text-transform: none; letter-spacing: 0; font-size: 12px; margin-left: 6px; }
+
+/* Plot first on forward steps: full-width column, plot capped at a readable size. */
+.nvz-plot-first { grid-template-columns: 1fr; }
+.nvz-plot-first .nvz-flow > .nvz-scene { max-width: 560px; }
+
+/* Axis ticks, context points, legends */
+.nvz-tick { fill: var(--muted); font-size: 10px; font-family: var(--mono); }
+.nvz-ctx-pt { opacity: 0.28; stroke: none; pointer-events: none; }
+.nvz-ctx-note { margin: 8px 0 0; font-size: 13px; color: var(--muted); max-width: 60ch; }
+.nvz-scene-legend i.diamond { border-radius: 0; transform: rotate(45deg) scale(0.85); }
+.nvz-scene-legend i.nvz-pt-ctx { background: var(--muted); opacity: 0.35; }
+.nvz-colour-legend { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.nvz-colour-legend i { display: inline-block; width: 44px; height: 8px; border-radius: 2px; background: linear-gradient(to right, rgba(234, 88, 12, 0.55), rgba(234, 88, 12, 0)); }
+.nvz-colour-legend i.pos { background: linear-gradient(to right, rgba(37, 99, 235, 0), rgba(37, 99, 235, 0.55)); }
+.nvz-colour-legend .nvz-muted { margin-left: 6px; }
+
+/* 3D */
+.nvz-app.nvz-dim-3d .nvz-centre { padding: 16px 20px; display: flex; flex-direction: column; }
+.nvz-scene3d { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+.nvz-scene3d .nvz-stephead { margin-bottom: 0; flex-wrap: wrap; }
+.nvz-3d-tools { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 14px; color: var(--muted); }
+.nvz-3d-tools select { margin-left: 6px; font: inherit; }
+.nvz-canvas3d { flex: 1; min-height: 420px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.nvz-3d-caption { margin: 0; font-size: 13px; color: var(--muted); max-width: 110ch; }
+.nvz-3d-label { font: 12px/1.2 var(--mono); color: var(--fg); white-space: nowrap; background: color-mix(in srgb, var(--panel) 80%, transparent); padding: 1px 5px; border-radius: 4px; }
+.nvz-3d-label.muted { color: var(--muted); background: none; }
+.nvz-3d-value { font-size: 11px; }
+.nvz-3d-label.clickable { cursor: pointer; }
+.nvz-3d-label.clickable:hover { outline: 1px solid var(--accent); }
+@media (max-width: 1100px) {
+  .nvz-app.nvz-rail { grid-template-columns: 220px minmax(0, 1fr) 48px; }
+}

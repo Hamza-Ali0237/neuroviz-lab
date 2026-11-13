@@ -1,6 +1,6 @@
 import { useAppState, useDispatch } from "../../state/store";
 import type { EventRecord, NodeRecord } from "../../trace/types";
-import { fmt, fmtTerm, sub, shapeStr } from "../../format";
+import { eventLabel, fmt, fmtTerm, keyLabel, sub, shapeStr } from "../../format";
 import { unflatIndex } from "../../trace/load";
 import { MatrixView } from "./MatrixView";
 import { OpCard } from "./OpCard";
@@ -137,10 +137,10 @@ function GenericEvent({ e }: { e: EventRecord }) {
   const { trace } = useAppState();
   return (
     <article className="nvz-node">
-      <h3>{e.kind.replace(/_/g, " ")}</h3>
+      <h3>{eventLabel(e.kind)}</h3>
       <dl className="nvz-payload mono">
         {Object.entries(e.payload).map(([k, v]) => (
-          <div key={k}><dt>{k}</dt><dd>{typeof v === "string" && trace.tensors.has(v) ? `${v} (${trace.label(v)})` : JSON.stringify(v)}</dd></div>
+          <div key={k}><dt>{keyLabel(k)}</dt><dd>{typeof v === "string" && trace.tensors.has(v) ? `${v} (${trace.label(v)})` : JSON.stringify(v)}</dd></div>
         ))}
       </dl>
       {e.refs.map((tid) => (
@@ -162,14 +162,17 @@ export function Scene2D() {
   const nodes = trace.nodesInStep(stepIndex);
   const events = trace.eventsInStep(stepIndex);
   const hasScene = trace.raw.model.family === "linear" && [1, 2].includes(trace.raw.mode.n_features);
+  // Forward steps: the model's plot comes first so it is visible without scrolling.
+  const plotFirst = hasScene && step.phase === "forward";
   return (
-    <div className="nvz-scene2d">
+    <div className={`nvz-scene2d ${plotFirst ? "nvz-plot-first" : ""}`}>
       <div className="nvz-flow">
         <header className="nvz-stephead">
           <span className={`nvz-phase-pill nvz-phase-${step.phase}`}>{step.phase}</span>
           <h2>{step.title}</h2>
           {trace.raw.kind === "train" && <span className="nvz-muted">iteration {step.iteration + 1}</span>}
         </header>
+        {plotFirst && <LRScene />}
         {nodes.map((n) => (
           <NodeView key={n.id} node={n} />
         ))}
@@ -178,7 +181,7 @@ export function Scene2D() {
         ))}
         {!nodes.length && !events.length && <p className="nvz-muted">Nothing recorded in this step.</p>}
       </div>
-      {hasScene && (
+      {hasScene && !plotFirst && (
         <div className="nvz-side">
           <LRScene />
         </div>

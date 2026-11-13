@@ -1,5 +1,5 @@
 import { useAppState, useDispatch } from "../../state/store";
-import { fmt, fmtFull, shapeStr } from "../../format";
+import { fmt, fmtFull, shapeStr, tint } from "../../format";
 import { flatIndex } from "../../trace/load";
 
 /**
@@ -58,15 +58,13 @@ export function MatrixView({ tensorId, caption }: { tensorId: string; caption?: 
                   const idx = t.shape.length ? [...lead, c] : [];
                   const flat = r * cols + c;
                   const v = t.values![flat];
-                  const alpha = Math.min(1, Math.abs(v) / absMax) * 0.55;
-                  const tint = v >= 0 ? `rgba(37, 99, 235, ${alpha})` : `rgba(234, 88, 12, ${alpha})`;
                   const isSel = flat === selectedFlat;
                   const sampleCell = perSample && t.shape.length === 1 && idx[0] === sampleIndex;
                   return (
                     <td
                       key={c}
                       className={`nvz-cell ${isSel ? "selected" : ""} ${sampleCell ? "nvz-row-sample" : ""}`}
-                      style={{ "--tint": tint } as React.CSSProperties}
+                      style={{ "--tint": tint(v, absMax) } as React.CSSProperties}
                       title={`${name}[${idx.join(", ")}] = ${fmtFull(v)}`}
                       onClick={() => {
                         dispatch({ type: "select", selection: { tensorId, index: idx } });
@@ -82,6 +80,21 @@ export function MatrixView({ tensorId, caption }: { tensorId: string; caption?: 
           })}
         </tbody>
       </table>
+      <ColourLegend absMax={absMax} />
     </figure>
+  );
+}
+
+/** Diverging colour-scale legend centred on 0 (orange negative, blue positive). */
+export function ColourLegend({ absMax }: { absMax: number }) {
+  return (
+    <div className="nvz-colour-legend mono" aria-label="Colour scale">
+      <span>−{fmt(absMax)}</span>
+      <i />
+      <span>0</span>
+      <i className="pos" />
+      <span>+{fmt(absMax)}</span>
+      <span className="nvz-muted">negative · 0 · positive</span>
+    </div>
   );
 }

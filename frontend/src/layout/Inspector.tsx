@@ -9,9 +9,9 @@ export function Inspector() {
   const tensor = selection.tensorId ? trace.tensor(selection.tensorId) : null;
   if (!tensor && !node) {
     return (
-      <aside className="nvz-inspector">
+      <aside className="nvz-inspector nvz-inspector-rail" title="Click a number or a tensor name to inspect it. Hover any number for its source.">
         <h2>Inspector</h2>
-        <p className="nvz-muted">Click a number or a tensor name to inspect it. Hover any number for its source.</p>
+        <p className="nvz-muted">Click a number or a tensor name to inspect it.</p>
       </aside>
     );
   }
@@ -19,7 +19,12 @@ export function Inspector() {
   const sel = selection.index;
   return (
     <aside className="nvz-inspector">
-      <h2>Inspector</h2>
+      <h2>
+        Inspector{" "}
+        <button className="nvz-link" onClick={() => dispatch({ type: "clearSelection" })} title="Clear selection (Esc)">
+          clear
+        </button>
+      </h2>
       {node && !tensor && (
         <dl>
           <dt>node</dt>

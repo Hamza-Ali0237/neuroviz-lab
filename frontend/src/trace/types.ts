@@ -1,7 +1,7 @@
 /** TypeScript mirror of trace schema v0 (`nvzlab.trace/0`). */
 
 export type Phase = "forward" | "loss" | "backward" | "update";
-export type Role = "input" | "param" | "activation" | "output" | "grad" | "loss" | "label";
+export type Role = "input" | "param" | "activation" | "output" | "grad" | "loss" | "label" | "context";
 
 export interface Explanation {
   title: string;
@@ -18,6 +18,8 @@ export interface TensorRecord {
   stats: { min: number; max: number; mean: number };
   data: string | null;
   truncated: boolean;
+  /** Set on `context` tensors: what the tensor is and what was held fixed or sampled. */
+  note: string | null;
 }
 
 export interface NodeRecord {

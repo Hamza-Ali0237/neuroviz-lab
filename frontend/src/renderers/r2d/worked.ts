@@ -4,7 +4,7 @@
  */
 import type { TraceView } from "../../trace/load";
 import type { NodeRecord } from "../../trace/types";
-import { fmt, fmtTerm, sub } from "../../format";
+import { fmt, fmtTerm, signed, sub } from "../../format";
 
 export interface WorkedLine {
   /** Left-hand side, e.g. "z₀" or "∂L/∂w₁". */
@@ -83,7 +83,7 @@ function workedForward(trace: TraceView, node: NodeRecord, outId: string, index:
       if (bId) {
         const bShape = shape(bId);
         const bv = val(trace, bId, bShape.length === 0 ? [] : [wIs1d ? 0 : j]);
-        expr += ` + ${fmtTerm(bv)}`;
+        expr += signed(bv);
       }
       return [{ lhs: idxName("z", index), expr, value }];
     }
