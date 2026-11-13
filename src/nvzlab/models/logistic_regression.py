@@ -77,7 +77,7 @@ class LogisticRegression(Model):
         else:
             axes = (("w", float(w[0])), ("b", float(b[0])))
             fixed = "nothing else is held fixed (w and b are the only parameters)"
-        grid = [np.linspace(min(-3.0, c - 1.0), max(3.0, c + 1.0), LOSS_GRID) for _, c in axes]
+        grid = [np.linspace(c - 1.0, c + 1.0, LOSS_GRID) for _, c in axes]
         a0, a1 = np.meshgrid(grid[0], grid[1], indexing="ij")
         if self.features == 2:
             z = x[:, 0, None, None] * a0 + x[:, 1, None, None] * a1 + b[0]
