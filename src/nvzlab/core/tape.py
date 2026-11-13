@@ -433,9 +433,7 @@ def _jsonable(attrs: dict[str, Any]) -> dict[str, Any]:
 
 
 @contextmanager
-def step(
-    title: str, backward_title: str | None = None, layer: str | None = None
-) -> Iterator[None]:
+def step(title: str, backward_title: str | None = None, layer: str | None = None) -> Iterator[None]:
     """Group the ops and events inside into one playback step (no-op outside a tape).
 
     In train traces each forward step gets a mirrored backward step titled
