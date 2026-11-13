@@ -5,25 +5,35 @@ import { StepList } from "./layout/StepList";
 import { Inspector } from "./layout/Inspector";
 import { Playback } from "./layout/Playback";
 import { Scene2D } from "./renderers/r2d/Scene2D";
+import { Scene3D } from "./renderers/r3d/Scene3D";
 
 function Centre() {
   const { dimension } = useAppState();
-  // The 3D renderer plugs in here; it reads the same store and trace.
-  return dimension === "2d" ? <Scene2D /> : <div className="nvz-empty">3D view coming next.</div>;
+  // Both renderers read and write the same store: step, selection and sample survive the switch.
+  return dimension === "2d" ? <Scene2D /> : <Scene3D />;
 }
 
-export function App({ trace }: { trace: TraceView }) {
+function Frame() {
+  const { selection, dimension } = useAppState();
+  const slim = !selection.nodeId && !selection.tensorId;
   return (
-    <StoreProvider trace={trace}>
-      <div className="nvz-app">
-        <TopBar />
-        <StepList />
-        <main className="nvz-centre">
-          <Centre />
-        </main>
-        <Inspector />
-        <Playback />
-      </div>
+    <div className={`nvz-app ${slim ? "nvz-rail" : ""} nvz-dim-${dimension}`}>
+      <TopBar />
+      <StepList />
+      <main className="nvz-centre">
+        <Centre />
+      </main>
+      <Inspector />
+      <Playback />
+    </div>
+  );
+}
+
+export function App({ trace, dim = "2d" }: { trace: TraceView; dim?: "2d" | "3d" }) {
+  return (
+    <StoreProvider trace={trace} dim={dim}>
+      <Frame />
     </StoreProvider>
   );
 }
+

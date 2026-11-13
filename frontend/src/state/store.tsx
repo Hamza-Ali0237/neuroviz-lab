@@ -67,7 +67,7 @@ export function reducer(s: AppState, a: Action): AppState {
 const StateCtx = createContext<AppState | null>(null);
 const DispatchCtx = createContext<Dispatch<Action> | null>(null);
 
-export function StoreProvider({ trace, children }: { trace: TraceView; children: ReactNode }) {
+export function StoreProvider({ trace, dim = "2d", children }: { trace: TraceView; dim?: "2d" | "3d"; children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
     trace,
     stepIndex: 0,
@@ -75,7 +75,7 @@ export function StoreProvider({ trace, children }: { trace: TraceView; children:
     speed: 1,
     selection: EMPTY,
     sampleIndex: 0,
-    dimension: "2d",
+    dimension: dim,
   });
 
   // Playback timer: one step per second at 1×.
@@ -93,6 +93,7 @@ export function StoreProvider({ trace, children }: { trace: TraceView; children:
       if (e.key === "ArrowRight") dispatch({ type: "next" });
       else if (e.key === "ArrowLeft") dispatch({ type: "prev" });
       else if (e.key === " ") dispatch({ type: "toggle" });
+      else if (e.key === "Escape") dispatch({ type: "clearSelection" });
       else return;
       e.preventDefault();
     };

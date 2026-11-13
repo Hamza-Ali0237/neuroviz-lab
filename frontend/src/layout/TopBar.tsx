@@ -1,5 +1,6 @@
 import { useAppState, useDispatch } from "../state/store";
 import { PHASES } from "../format";
+import { webglSupport } from "../renderers/r3d/webgl";
 
 const PROVENANCE: Record<string, string> = {
   "builtin-pretrained": "Pretrained weights",
@@ -11,6 +12,7 @@ export function TopBar() {
   const { trace, dimension } = useAppState();
   const dispatch = useDispatch();
   const { model, kind, mode, meta } = trace.raw;
+  const webgl = webglSupport();
   return (
     <header className="nvz-topbar">
       <div className="nvz-brand">nvzlab</div>
@@ -38,7 +40,13 @@ export function TopBar() {
         >
           2D
         </button>
-        <button disabled title="3D view coming next" aria-disabled="true">
+        <button
+          className={dimension === "3d" ? "active" : ""}
+          disabled={!webgl.ok}
+          aria-disabled={!webgl.ok}
+          title={webgl.ok ? "3D view (same step, selection and sample)" : `3D unavailable: ${webgl.reason}`}
+          onClick={() => dispatch({ type: "dimension", dimension: "3d" })}
+        >
           3D
         </button>
       </div>

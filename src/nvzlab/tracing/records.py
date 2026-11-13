@@ -215,11 +215,9 @@ class Trace:
         --------
         >>> nvz.trace("logistic_regression").show()  # doctest: +SKIP
         """
-        if dim not in ("2d", "3d"):
-            raise ValueError(f"dim must be '2d' or '3d', received {dim!r}.")
         from nvzlab import viewer
 
-        return viewer.show(self)
+        return viewer.show(self, dim=dim)
 
     # --- inspection -----------------------------------------------------------------
     def summary(self) -> str:

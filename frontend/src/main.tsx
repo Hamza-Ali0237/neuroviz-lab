@@ -15,12 +15,14 @@ async function readTrace(): Promise<TraceRecord> {
   return (await res.json()) as TraceRecord;
 }
 
-const root = createRoot(document.getElementById("root")!);
+const rootEl = document.getElementById("root")!;
+const dim = rootEl.dataset.dim === "3d" ? "3d" : "2d";
+const root = createRoot(rootEl);
 readTrace()
   .then((raw) => {
     root.render(
       <StrictMode>
-        <App trace={loadTrace(raw)} />
+        <App trace={loadTrace(raw)} dim={dim} />
       </StrictMode>,
     );
   })

@@ -33,7 +33,7 @@ _PAGE = """<!doctype html>
 <style>{css}</style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root" data-dim="{dim}"></div>
 <script id="nvz-trace" type="application/json">{trace}</script>
 <script type="module">{js}</script>
 </body>
@@ -51,8 +51,11 @@ def _static(name: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def to_html(trace: Trace) -> str:
+def to_html(trace: Trace, dim: str = "2d") -> str:
     """The trace as one self-contained HTML page (JS, CSS and JSON inlined).
+
+    ``dim`` picks the renderer the page opens with (``"2d"`` or ``"3d"``); the viewer's
+    toggle switches between them at any time.
 
     Examples
     --------
@@ -60,8 +63,14 @@ def to_html(trace: Trace) -> str:
     """
     # "<" never appears unescaped inside the JSON, so "</script>" cannot end the tag early.
     payload = trace.to_json().replace("<", "\\u003c")
+    if dim not in ("2d", "3d"):
+        raise ValueError(f"dim must be '2d' or '3d', received {dim!r}.")
     return _PAGE.format(
-        title=trace.run_id, css=_static("nvzlab.css"), trace=payload, js=_static("nvzlab.js")
+        title=trace.run_id,
+        css=_static("nvzlab.css"),
+        trace=payload,
+        js=_static("nvzlab.js"),
+        dim=dim,
     )
 
 
@@ -75,7 +84,7 @@ def in_notebook() -> bool:
     return shell is not None and shell.__class__.__name__ == "ZMQInteractiveShell"
 
 
-def show(trace: Trace, height: int = 720) -> Path | None:
+def show(trace: Trace, height: int = 720, dim: str = "2d") -> Path | None:
     """Display ``trace``: inline in Jupyter, otherwise in the default browser.
 
     Outside a notebook the page is written to a temporary file whose path is printed and
@@ -85,7 +94,7 @@ def show(trace: Trace, height: int = 720) -> Path | None:
     --------
     >>> nvz.viewer.show(nvz.trace("logistic_regression"))  # doctest: +SKIP
     """
-    html = to_html(trace)
+    html = to_html(trace, dim)
     if in_notebook():
         from IPython.display import HTML, display  # type: ignore[import-not-found]
 
