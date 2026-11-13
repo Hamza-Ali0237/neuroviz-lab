@@ -8,8 +8,11 @@ import numpy as np
 
 from nvzlab import datasets, ops
 from nvzlab.core.errors import NvzError
-from nvzlab.core.tape import event, step
+from nvzlab.core.tape import context, event, step
 from nvzlab.models.base import Model
+from nvzlab.ops.losses import EPS
+
+LOSS_GRID = 41
 
 
 class LogisticRegression(Model):
@@ -53,3 +56,43 @@ class LogisticRegression(Model):
                 refs=[prob],
             )
         return prob
+
+    def record_context(
+        self, x: np.ndarray, y: np.ndarray | None, p: dict[str, np.ndarray], kind: str
+    ) -> None:
+        ds = self.dataset
+        context(
+            "dataset_X",
+            ds.X,
+            "The whole blobs dataset, for orientation. Only the highlighted samples are "
+            "computed in this trace.",
+        )
+        context("dataset_y", ds.y, "Labels of the whole blobs dataset (0 or 1).")
+        if kind != "train" or y is None:
+            return
+        w, b = p["w"], p["b"]
+        if self.features == 2:
+            axes = (("w1", float(w[0])), ("w2", float(w[1])))
+            fixed = f"b fixed at its initial value {float(b[0]):.4g}"
+        else:
+            axes = (("w", float(w[0])), ("b", float(b[0])))
+            fixed = "nothing else is held fixed (w and b are the only parameters)"
+        grid = [np.linspace(min(-3.0, c - 1.0), max(3.0, c + 1.0), LOSS_GRID) for _, c in axes]
+        a0, a1 = np.meshgrid(grid[0], grid[1], indexing="ij")
+        if self.features == 2:
+            z = x[:, 0, None, None] * a0 + x[:, 1, None, None] * a1 + b[0]
+        else:
+            z = x[:, 0, None, None] * a0 + a1
+        pc = np.clip(1.0 / (1.0 + np.exp(-z)), EPS, 1.0 - EPS)
+        yy = y[:, None, None]
+        loss = -np.mean(yy * np.log(pc) + (1.0 - yy) * np.log1p(-pc), axis=0)
+        n = x.shape[0]
+        context(
+            "loss_landscape",
+            loss,
+            f"Mean binary cross-entropy over the {n} sample(s) of this trace, evaluated on a "
+            f"{LOSS_GRID}×{LOSS_GRID} grid of ({axes[0][0]}, {axes[1][0]}) with {fixed}. "
+            "Real computed values; the training path moves across this surface.",
+        )
+        for (name, _), g in zip(axes, grid, strict=True):
+            context(f"loss_landscape_{name}", g, f"Grid values of {name} for loss_landscape.")

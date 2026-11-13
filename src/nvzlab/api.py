@@ -35,6 +35,7 @@ def trace(
     lr: float = 0.1,
     iterations: int = 1,
     dim: str = "2d",
+    name: str | None = None,
     **model_options: Any,
 ) -> Trace:
     """Run ``model`` step by step and return the recorded :class:`Trace`.
@@ -42,7 +43,8 @@ def trace(
     ``model`` is a built-in name, a function ``f(x, params)`` built from ``nvz.ops``, or a
     ``nvz.Model`` instance. With a built-in name, ``x``/``y`` default to a sample from the
     model's dataset. ``kind="train"`` records forward, loss, backward and one SGD update per
-    iteration (at most 3). User ``params`` are never modified.
+    iteration (at most 3). User ``params`` are never modified. ``name`` overrides the display
+    name (default: the built-in name, the function's ``__name__`` or the class name).
 
     Examples
     --------
@@ -77,7 +79,8 @@ def trace(
     if isinstance(model, Model):
         if samples is not None:
             model.check_option("samples", samples)
-        forward, name, family = model.forward, model.name, model.family
+        forward, family = model.forward, model.family
+        name = name or (model.name if model.name != Model.name else type(model).__name__)
         self_trained = kind == "train" and model.trains_itself
         if params is None:
             params = (
@@ -102,7 +105,8 @@ def trace(
             y = y_default if y is None else y
         dataset_info = dataset.to_dict() if dataset is not None else None
     elif callable(model):
-        forward, name, family = model, getattr(model, "__name__", "model"), "custom"
+        forward, family = model, "custom"
+        name = name or getattr(model, "__name__", type(model).__name__)
         dataset_info = None
     else:
         raise NvzError(
@@ -159,6 +163,8 @@ def trace(
             tape.watch(y, role="label", name="y")
         for k, v in params.items():
             tape.watch(v, role="param", name=k)
+        if isinstance(model, Model):
+            model.record_context(x, y, params, kind)
         if self_trained:
             tape.phase = "update"
             for it in model.train(x, y, iterations):

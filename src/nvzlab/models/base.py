@@ -42,6 +42,12 @@ class Model:
     def forward(self, x: np.ndarray, params: dict[str, np.ndarray]) -> np.ndarray:
         raise NotImplementedError
 
+    def record_context(
+        self, x: np.ndarray, y: np.ndarray | None, params: dict[str, np.ndarray], kind: str
+    ) -> None:
+        """Hook called once per trace, before the forward pass, to record ``nvz.context``
+        tensors (e.g. the whole dataset, a loss surface). Default: nothing."""
+
     def __call__(self, x: np.ndarray, params: dict[str, np.ndarray] | None = None) -> np.ndarray:
         return self.forward(x, self.params if params is None else params)
 

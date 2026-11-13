@@ -109,7 +109,7 @@ def test_buffers_are_float32_little_endian():
 def test_stats_rounded_and_tensor_roles():
     tr = nvz.trace("logistic_regression", kind="train", samples="batch")
     roles = {t.role for t in tr.tensors.values()}
-    assert roles == {"input", "label", "param", "activation", "output", "loss", "grad"}
+    assert roles == {"input", "label", "param", "activation", "output", "loss", "grad", "context"}
     for t in tr.tensors.values():
         for v in t.stats.values():
             assert v == float(f"{v:.6g}")
@@ -158,3 +158,55 @@ def test_truncation_of_large_tensors():
     assert all(x.truncated and x.array is None for x in tr.tensors.values())
     assert tr.to_dict()["tensors"]["t0"]["data"] is None
     validate(tr)
+
+
+def test_context_tensors_validate_and_carry_note():
+    tr = nvz.trace("logistic_regression", kind="train", samples="batch", iterations=2)
+    validate(tr)
+    ctx = {t.name: t for t in tr.tensors.values() if t.role == "context"}
+    assert set(ctx) == {
+        "dataset_X",
+        "dataset_y",
+        "loss_landscape",
+        "loss_landscape_w1",
+        "loss_landscape_w2",
+    }
+    assert ctx["dataset_X"].shape == (120, 2) and "orientation" in ctx["dataset_X"].note
+    assert ctx["loss_landscape"].shape == (41, 41)
+    assert "b fixed at its initial value" in ctx["loss_landscape"].note
+    # Context tensors are never used by nodes, and every other tensor has no note.
+    used = {t for n in tr.nodes for t in n.inputs + n.outputs}
+    assert not used & {t.id for t in ctx.values()}
+    assert all(t.note is None for t in tr.tensors.values() if t.role != "context")
+    assert (
+        nvz.Trace.load.__name__
+        and nvz.Trace.from_dict(tr.to_dict()).tensors[ctx["loss_landscape"].id].note
+        == ctx["loss_landscape"].note
+    )
+    # predict traces record the dataset but no loss surface
+    names = {
+        t.name for t in nvz.trace("logistic_regression").tensors.values() if t.role == "context"
+    }
+    assert names == {"dataset_X", "dataset_y"}
+
+
+@pytest.mark.parametrize("features", [1, 2])
+def test_loss_landscape_matches_direct_evaluation(features):
+    from nvzlab import ops
+
+    tr = nvz.trace("logistic_regression", kind="train", samples="batch", features=features)
+    ctx = {t.name: t.array for t in tr.tensors.values() if t.role == "context"}
+    x = next(t.array for t in tr.tensors.values() if t.name == "x")
+    y = next(t.array for t in tr.tensors.values() if t.name == "y")
+    model = nvz.models.load("logistic_regression", features=features)
+    b0 = model.initial_params["b"][0]
+    a0, a1 = (
+        (ctx["loss_landscape_w1"], ctx["loss_landscape_w2"])
+        if features == 2
+        else (ctx["loss_landscape_w"], ctx["loss_landscape_b"])
+    )
+    for i, j in [(0, 0), (20, 20), (40, 7)]:
+        w = np.array([a0[i], a1[j]]) if features == 2 else np.array([a0[i]])
+        b = np.array([b0]) if features == 2 else np.array([a1[j]])
+        direct = ops.bce(ops.sigmoid(ops.linear(x, w, b)), y)
+        assert ctx["loss_landscape"][i, j] == pytest.approx(float(direct), rel=1e-9)

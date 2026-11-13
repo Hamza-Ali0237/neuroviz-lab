@@ -64,11 +64,11 @@
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["shape", "dtype", "role", "name", "stats", "data", "truncated"],
+        "required": ["shape", "dtype", "role", "name", "stats", "data", "truncated", "note"],
         "properties": {
           "shape": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
           "dtype": { "const": "float32" },
-          "role": { "enum": ["input", "param", "activation", "output", "grad", "loss", "label"] },
+          "role": { "enum": ["input", "param", "activation", "output", "grad", "loss", "label", "context"] },
           "name": { "type": ["string", "null"] },
           "stats": {
             "type": "object",
@@ -81,7 +81,8 @@
             }
           },
           "data": { "type": ["string", "null"] },
-          "truncated": { "type": "boolean" }
+          "truncated": { "type": "boolean" },
+          "note": { "type": ["string", "null"] }
         }
       }
     },

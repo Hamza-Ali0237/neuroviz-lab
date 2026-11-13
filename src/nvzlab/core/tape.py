@@ -101,6 +101,18 @@ class Tape:
                 t.role = role
         return tid
 
+    def context(self, name: str, arr: Any, note: str) -> str:
+        """Record ``arr`` as a context tensor (shown for orientation, not computed).
+
+        Recording the same ``name`` again (e.g. once per training iteration) is a no-op.
+        """
+        for tid, t in self.tensors.items():
+            if t.role == "context" and t.name == name:
+                return tid
+        tid = self.watch(np.asarray(arr, dtype=np.float64), role="context", name=name)
+        self.tensors[tid].note = note
+        return tid
+
     def tensor_id(self, arr: Any) -> str | None:
         """Tensor id of an array seen by this tape, or ``None``."""
         return self._ids.get(id(arr))
@@ -468,3 +480,19 @@ def event(kind: str, payload: dict[str, Any] | None = None, refs: Sequence[Any] 
     tape = current_tape()
     if tape is not None:
         tape.event(kind, payload, refs)
+
+
+def context(name: str, array: Any, note: str) -> None:
+    """Record a tensor shown for orientation only, e.g. the whole dataset behind a sample.
+
+    Context tensors are not part of the computation: renderers draw them faded and always
+    show ``note``. No-op outside a tape.
+
+    Examples
+    --------
+    >>> import numpy as np, nvzlab as nvz
+    >>> nvz.context("dataset_X", np.zeros((120, 2)), "The whole dataset, for orientation.")
+    """
+    tape = current_tape()
+    if tape is not None:
+        tape.context(name, array, note)

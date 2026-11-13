@@ -160,3 +160,30 @@ def test_sgd_update_matches_formula():
     assert w.tolist() == [1.0, 2.0]
     ev = [e for e in t.events if e.kind == "sgd_update"]
     assert [e.payload["param"] for e in ev] == ["w", "b"] and ev[0].payload["lr"] == 0.3
+
+
+def test_context_outside_tape_is_noop_and_dedupes_by_name():
+    nvz.context("whatever", np.zeros(2), "no tape, nothing recorded")
+    with nvz.Tape() as t:
+        a = t.context("ds", np.zeros((3, 2)), "note A")
+        b = t.context("ds", np.ones((3, 2)), "note B")
+    assert a == b and t.tensors[a].note == "note A" and t.tensors[a].role == "context"
+
+
+def test_user_model_display_name_and_override():
+    def my_net(x, p):
+        return ops.sigmoid(ops.linear(x, p["w"], p["b"]))
+
+    p = {"w": np.array([0.5, -0.5]), "b": np.zeros(1)}
+    x = np.array([[1.0, 2.0]])
+    assert nvz.trace(my_net, x, params=p).model["name"] == "my_net"
+    assert nvz.trace(my_net, x, params=p, name="Tiny net").model["name"] == "Tiny net"
+
+    class Tiny(nvz.Model):
+        def __init__(self):
+            self.params = p
+
+        def forward(self, x, p):
+            return ops.sigmoid(ops.linear(x, p["w"], p["b"]))
+
+    assert nvz.trace(Tiny(), x).model["name"] == "Tiny"

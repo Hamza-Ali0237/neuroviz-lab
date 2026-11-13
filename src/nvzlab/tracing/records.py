@@ -23,6 +23,7 @@ class Tensor:
     shape: tuple[int, ...] = ()
     stats: dict[str, float] = field(default_factory=dict)
     truncated: bool = False
+    note: str | None = None
 
     @classmethod
     def from_array(cls, tid: str, arr: np.ndarray, role: str, name: str | None) -> Tensor:
@@ -41,6 +42,7 @@ class Tensor:
             "stats": self.stats,
             "data": None if self.array is None else serializer.encode_array(self.array),
             "truncated": self.truncated,
+            "note": self.note,
         }
 
 
@@ -171,7 +173,14 @@ class Trace:
         for tid, t in d["tensors"].items():
             arr = None if t["data"] is None else serializer.decode_array(t["data"], t["shape"])
             tensors[tid] = Tensor(
-                tid, arr, t["role"], t["name"], tuple(t["shape"]), t["stats"], t["truncated"]
+                tid,
+                arr,
+                t["role"],
+                t["name"],
+                tuple(t["shape"]),
+                t["stats"],
+                t["truncated"],
+                t.get("note"),
             )
         return cls(
             run_id=d["run_id"],
