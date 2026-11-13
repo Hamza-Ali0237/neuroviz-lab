@@ -51,6 +51,8 @@ export interface StepRecord {
   title: string;
   phase: Phase;
   iteration: number;
+  /** Optional layer label (e.g. "Hidden layer 1") for grouping steps. */
+  layer: string | null;
   nodes: string[];
   events: string[];
 }
