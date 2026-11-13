@@ -1,4 +1,4 @@
-"""Loss ops: bce, cross_entropy."""
+"""Loss ops: bce, cross_entropy, nll."""
 
 from __future__ import annotations
 
@@ -122,3 +122,47 @@ def _onehot(y: np.ndarray, shape: tuple[int, ...]) -> np.ndarray:
         "use class indices, not probabilities",
     )
     return np.eye(c)[idx]
+
+
+@op(
+    category="loss",
+    formula=r"L = -\frac{1}{n}\sum_i \log p_{i, y_i}",
+    text=(
+        "Cross-entropy of predicted class probabilities: the negative log of the "
+        "probability given to the true class, averaged over samples. Probabilities are "
+        "clipped to [1e-12, 1] before the log for stability."
+    ),
+    shape_rule="probabilities (n, C) and labels (n,) class indices or (n, C) one-hot -> scalar",
+    backward_formula=(
+        r"\frac{\partial L}{\partial p_{i,k}} = -g \cdot \frac{\mathbb{1}[k = y_i]}{n\,p_{i,k}}"
+    ),
+    backward_text=(
+        "Only the probability of the true class gets a gradient: the smaller it is, the "
+        "harder it is pushed up. Other classes and the labels get none."
+    ),
+)
+def nll(p: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Mean negative log-likelihood of class probabilities ``p`` (rows sum to 1).
+
+    Use after :func:`softmax`; :func:`cross_entropy` does both steps from logits.
+
+    Examples
+    --------
+    >>> from nvzlab import ops
+    >>> float(ops.nll(np.array([[0.5, 0.5]]), np.array([1])))
+    0.6931471805599453
+    """
+    check_shape(
+        p.ndim == 2,
+        "nll",
+        "p to be 2-D (n_samples, n_classes)",
+        f"p {p.shape}",
+        "reshape a single sample as p.reshape(1, -1)",
+    )
+    onehot = _onehot(y, p.shape)
+    return np.asarray(-np.mean(np.log(np.clip(p, EPS, 1.0)[onehot > 0])))
+
+
+@nll.backward
+def _(grad, p, y, out):
+    return -grad * _onehot(y, p.shape) * (p > EPS) / (np.clip(p, EPS, 1.0) * p.shape[0]), None

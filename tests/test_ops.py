@@ -90,7 +90,7 @@ def test_every_builtin_op_is_documented():
             continue
         e = o.explain({}, [], ())
         assert e and e["formula"] and e["text"] and e["shape_rule"], name
-        assert o.differentiable, name
+        assert o.differentiable == (name != "tree_predict"), name
 
 
 def test_ops_run_as_plain_numpy_outside_tape():
@@ -114,3 +114,42 @@ def test_mul_broadcast(rng):
     gradcheck(ops.mul, [a, np.array(2.0)])
     with pytest.raises(ShapeError, match="mul: expected shapes that broadcast"):
         ops.mul(a, rng.normal(size=3))
+
+
+def test_nll(rng):
+    p = rng.uniform(0.05, 0.95, size=(5, 3))
+    p /= p.sum(axis=1, keepdims=True)
+    y = rng.integers(0, 3, size=5)
+    np.testing.assert_allclose(ops.nll(p, y), -np.mean(np.log(p[np.arange(5), y])))
+    np.testing.assert_allclose(ops.nll(p, np.eye(3)[y]), ops.nll(p, y))  # one-hot labels
+    # softmax then nll equals cross_entropy from logits, forward and backward
+    z = rng.normal(size=(5, 3))
+    np.testing.assert_allclose(ops.nll(ops.softmax(z), y), ops.cross_entropy(z, y))
+    gradcheck(ops.nll, [p, y.astype(float)], diff=[0])
+    assert float(ops.nll(np.array([[0.0, 1.0]]), np.array([0]))) == -np.log(1e-12)  # clipped
+    with pytest.raises(ShapeError, match="nll: expected p to be 2-D"):
+        ops.nll(np.array([0.5, 0.5]), np.array([0]))
+
+
+def test_tree_predict():
+    # root: x1 <= 0.5 -> node 1 (counts 4,1) else node 2 (1,4)
+    tree = dict(
+        feature=np.array([0, -1, -1]),
+        threshold=np.array([0.5, 0.0, 0.0]),
+        left=np.array([1, -1, -1]),
+        right=np.array([2, -1, -1]),
+        counts=np.array([[5, 5], [4, 1], [1, 4]]),
+    )
+    x = np.array([[0.2, 9.0], [0.5, 9.0], [0.9, 9.0]])
+    out = ops.tree_predict(x, *tree.values())
+    np.testing.assert_allclose(out, [[0.8, 0.2], [0.8, 0.2], [0.2, 0.8]])  # <= goes left
+    assert not ops.tree_predict.differentiable
+    with nvz.Tape() as t:
+        loss = ops.sum(ops.tree_predict(x, *tree.values()))
+        grads = t.backward(loss)
+    assert [e.kind for e in t.events] == ["backward_stopped"]
+    assert t.tensor_id(x) not in grads and not any(n.op == "tree_predict" for n in t.nodes[1:])
+    with pytest.raises(ShapeError, match="tree_predict: expected feature indices below"):
+        ops.tree_predict(x[:, :1], [1, -1, -1], *list(tree.values())[1:])
+    with pytest.raises(ShapeError, match="tree_predict: expected counts"):
+        ops.tree_predict(x, tree["feature"], tree["threshold"], tree["left"], tree["right"], [1])

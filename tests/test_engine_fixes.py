@@ -55,8 +55,9 @@ def test_every_builtin_backward_node_is_explained():
     assert sig.explain["title"] == "sigmoid (backward)"
     for name in nvz.list_ops():
         o = nvz.core.registry.get(name)
-        if o.origin == "builtin":
+        if o.origin == "builtin" and o.differentiable:
             assert o.explain_backward({}, [], ()), name
+    assert nvz.core.registry.get("tree_predict").explain_backward({}, [], ()) is None
 
 
 def test_user_op_without_backward_explanation_keeps_none():
