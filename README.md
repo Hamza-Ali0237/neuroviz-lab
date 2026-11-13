@@ -24,7 +24,9 @@ tr.save("run.html")  # one self-contained page; "run.json" for the raw trace
 
 `nvz.show` displays inline in Jupyter and opens the browser from a script. Step with
 ←/→, play with space, click any number to see where it came from and the arithmetic
-that produced it. `nvz.list_models()`, `nvz.list_datasets()` and `nvz.list_ops()` show
+that produced it. The 2D/3D toggle switches renderer without losing the step or the
+selection (`dim="3d"` opens in 3D); every 3D scene states what height, colour and
+position mean. `nvz.list_models()`, `nvz.list_datasets()` and `nvz.list_ops()` show
 what is built in.
 
 Built-in models: `logistic_regression` (on `blobs`, 1 or 2 features), `mlp` (2 → 4 ReLU → 2
@@ -74,6 +76,8 @@ y = np.array([1.0, 0.0])
 
 my_model(x, params)  # plain NumPy
 tr = nvz.trace(my_model, x, y, params=params, kind="train", loss="bce", lr=0.1, iterations=2)
+# nvz.context("dataset_X", X_all, "note") inside the model records a tensor drawn faded
+# behind the plots for orientation (e.g. the whole dataset); it is never computed on.
 print(tr)
 tr.save("my_model.json")
 ```
@@ -96,7 +100,11 @@ The viewer lives in `frontend/` (Vite, React, TypeScript, KaTeX) and builds into
 cd frontend && npm install
 npm run dev        # live viewer on frontend/dev/sample-trace.json
 npm run typecheck && npm run build
+python dev/make_pages.py /tmp/pages && npm run screenshots -- /tmp/pages ../../nvz-artifacts/p03b
 ```
+
+The screenshot script drives headless Chrome with `--use-angle=swiftshader
+--enable-unsafe-swiftshader` so the 3D scenes render without a GPU.
 
 ## License
 

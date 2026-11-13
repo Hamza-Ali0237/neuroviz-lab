@@ -1,8 +1,9 @@
-// Dev-only visual check: open exported viewer pages, step through them and screenshot.
+// Dev-only visual check: open exported viewer pages, drive them and screenshot.
 // Usage: npm run screenshots -- <pages-dir> <out-dir>
-// Fails if any page logs a console error.
+// Expects pages written by frontend/dev/make_pages.py: lr-predict-f2.html, lr-train-batch-f2.html,
+// opaque.html. Fails if any page logs a console error.
+// Headless WebGL: Chrome with --use-angle=swiftshader --enable-unsafe-swiftshader.
 import { chromium } from "playwright";
-import { readdirSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,40 +17,67 @@ const SIZES = [
   [1024, 768],
 ];
 const THEMES = ["light", "dark"];
-const browser = await chromium.launch({ channel: "chrome" });
+const browser = await chromium.launch({
+  channel: "chrome",
+  args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
+});
 const errors = [];
 
-for (const file of readdirSync(pagesDir).filter((f) => f.endsWith(".html")).sort()) {
-  const name = file.replace(/\.html$/, "");
-  for (const [w, h] of SIZES) {
-    for (const theme of THEMES) {
-      const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: theme });
-      page.on("console", (m) => m.type() === "error" && errors.push(`${file}: ${m.text()}`));
-      page.on("pageerror", (e) => errors.push(`${file}: ${e.message}`));
-      await page.goto(pathToFileURL(join(pagesDir, file)).href);
-      await page.waitForSelector(".nvz-app");
-      const last = await page.locator(".nvz-steps .nvz-step").count() - 1;
-      const shot = async (tag) => {
-        await page.locator(".nvz-centre").evaluate((el) => el.scrollTo(0, 0));
-        await page.screenshot({ path: join(outDir, `${name}__${tag}__${w}x${h}__${theme}.png`) });
-      };
-      await shot("first");
-      // Middle step: the last step with a sigmoid or the opaque op, then select its last output cell.
-      const ops = await page.locator(".nvz-steps .nvz-step-ops").allTextContents();
-      let mid = Math.max(1, Math.floor(last / 2));
-      ops.forEach((t, i) => /sigmoid|clamp_half/.test(t) && (mid = i));
-      await page.locator(".nvz-steps .nvz-step").nth(mid).click();
-      const cells = page.locator(".nvz-tensor-group").last().locator(".nvz-cell");
-      if ((await cells.count()) > 0) await cells.last().click();
-      await page.waitForTimeout(300);
-      await shot("middle-selected");
-      await page.locator(".nvz-steps .nvz-step").nth(last).click();
-      await page.waitForTimeout(300);
-      await shot("last");
-      await page.close();
-    }
+async function open(file, w, h, theme) {
+  const page = await browser.newPage({ viewport: { width: w, height: h }, colorScheme: theme });
+  page.on("console", (m) => m.type() === "error" && errors.push(`${file}: ${m.text()}`));
+  page.on("pageerror", (e) => errors.push(`${file}: ${e.message}`));
+  await page.goto(pathToFileURL(join(pagesDir, file)).href);
+  await page.waitForSelector(".nvz-app");
+  return page;
+}
+const shot = (page, name, w, h, theme) =>
+  page.screenshot({ path: join(outDir, `${name}__${w}x${h}__${theme}.png`) });
+const to3d = async (page) => {
+  await page.getByRole("button", { name: "3D", exact: true }).click();
+  await page.waitForSelector(".nvz-canvas3d canvas");
+  await page.waitForTimeout(600);
+};
+const gotoStep = (page, i) => page.locator(".nvz-steps .nvz-step").nth(i).click();
+
+for (const [w, h] of SIZES) {
+  for (const theme of THEMES) {
+    // (a) LR predict f2, first step, 2D: context dataset and legends. (b) same in 3D.
+    let page = await open("lr-predict-f2.html", w, h, theme);
+    await shot(page, "a-lr-predict-f2-step0-2d", w, h, theme);
+    await to3d(page);
+    await shot(page, "b-lr-predict-f2-step0-3d-surface", w, h, theme);
+    await page.close();
+
+    // (c) LR train batch f2, update step of iteration 2, 3D loss landscape with path.
+    page = await open("lr-train-batch-f2.html", w, h, theme);
+    const titles = await page.locator(".nvz-steps .nvz-step-title").allTextContents();
+    const updates = titles.map((t, i) => (t.startsWith("Update") ? i : -1)).filter((i) => i >= 0);
+    await gotoStep(page, updates[1]);
+    await to3d(page);
+    await shot(page, "c-lr-train-f2-update2-3d-loss", w, h, theme);
+    // Select a cell in 3D through the tensor stack scene (at an update step it shows the
+    // updated params too), then switch to 2D: the selection must survive the renderer switch.
+    await page.locator(".nvz-3d-tools select").selectOption("tensors");
+    await page.waitForTimeout(400);
+    await page.locator(".nvz-3d-value").last().click();
+    await page.waitForTimeout(300);
+    const selected = await page.locator(".nvz-inspector dd").count();
+    if (!selected) errors.push("c: clicking the 3D cell did not select anything");
+    // (d) back to 2D with the selection intact.
+    await page.getByRole("button", { name: "2D", exact: true }).click();
+    await page.waitForTimeout(300);
+    await shot(page, "d-lr-train-f2-update2-2d-selected", w, h, theme);
+    await page.close();
+
+    // (e) opaque example in 3D: generic tensor stack.
+    page = await open("opaque.html", w, h, theme);
+    await gotoStep(page, 1);
+    await to3d(page);
+    await shot(page, "e-opaque-3d-tensors", w, h, theme);
+    await page.close();
   }
-  console.log(`done ${file}`);
+  console.log(`done ${w}x${h}`);
 }
 await browser.close();
 if (errors.length) {
