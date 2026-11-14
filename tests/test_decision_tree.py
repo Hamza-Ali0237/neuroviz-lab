@@ -253,3 +253,27 @@ def test_tree_traces_carry_the_dataset_as_context(kind):
         assert set(ctx) == {"dataset_y"}
         assert [t["shape"] for t in tensors if t["role"] == "input"] == [[120, 2]]
     assert ctx["dataset_y"]["shape"] == [120]
+
+
+def test_tree_structure_leaves_partition_the_dataset():
+    # The feature-space partition and the 3D leaf boxes draw one region per leaf, with
+    # height = count of class 1 / n at that leaf: every dataset row must land in exactly one
+    # leaf whose counts are the rows that reach it.
+    tr = nvz.trace("decision_tree", dataset="moons")
+    nodes = {n["id"]: n for n in events(tr, "tree_structure")[0].payload["nodes"]}
+    ds = nvz.models.load("decision_tree", dataset="moons").dataset
+    reached: dict[int, list[int]] = {}
+    for i, row in enumerate(ds.X):
+        node = nodes[0]
+        while not node["is_leaf"]:
+            node = nodes[
+                node["left"] if row[node["feature"]] <= node["threshold"] else node["right"]
+            ]
+        reached.setdefault(node["id"], []).append(int(ds.y[i]))
+    leaves = {n["id"] for n in nodes.values() if n["is_leaf"]}
+    assert set(reached) == leaves
+    assert sum(nodes[k]["n_samples"] for k in leaves) == len(ds.X)
+    for nid, labels in reached.items():
+        counts = [labels.count(0), labels.count(1)]
+        assert nodes[nid]["counts"] == counts
+        assert nodes[nid]["probability"] == max(counts) / sum(counts)

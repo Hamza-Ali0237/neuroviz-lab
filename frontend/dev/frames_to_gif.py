@@ -24,5 +24,7 @@ for f in files:
     images.append(im.quantize(colors=256, method=Image.Quantize.MEDIANCUT))
 durations = [round(seconds * 1000)] * len(images)
 durations[-1] += 1000
-images[0].save(out, save_all=True, append_images=images[1:], duration=durations, loop=0, optimize=True)
+images[0].save(
+    out, save_all=True, append_images=images[1:], duration=durations, loop=0, optimize=True
+)
 print(f"{out}: {len(images)} steps, {sum(durations) / 1000:.1f}s per loop")
