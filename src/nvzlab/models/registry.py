@@ -6,11 +6,13 @@ from typing import Any
 
 from nvzlab.core.errors import unknown_name
 from nvzlab.models.base import Model
+from nvzlab.models.cnn import CNN
 from nvzlab.models.decision_tree import DecisionTree
 from nvzlab.models.logistic_regression import LogisticRegression
 from nvzlab.models.mlp import MLP
 
 _MODELS: dict[str, type[Model]] = {
+    "cnn": CNN,
     "decision_tree": DecisionTree,
     "logistic_regression": LogisticRegression,
     "mlp": MLP,
@@ -37,7 +39,7 @@ def list_models() -> dict[str, str]:
     --------
     >>> import nvzlab as nvz
     >>> sorted(nvz.list_models())
-    ['decision_tree', 'logistic_regression', 'mlp']
+    ['cnn', 'decision_tree', 'logistic_regression', 'mlp']
     >>> print(nvz.list_models()["mlp"])  # doctest: +SKIP
     """
     out = {}

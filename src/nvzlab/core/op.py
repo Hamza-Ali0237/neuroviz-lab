@@ -70,6 +70,14 @@ class Op:
         """Return ``{"title", "formula", "text", "shape_rule"}`` or ``None`` (opaque op)."""
         return None
 
+    def node_attrs(self, ctx: Any) -> dict[str, Any]:
+        """Extra attrs stored on the recorded node, derived from the backward context.
+
+        Used for data a renderer needs that is neither an input nor an output, such as the
+        argmax routing of a max pool. Default: none.
+        """
+        return {}
+
     def explain_backward(
         self, attrs: dict[str, Any], in_shapes: list[tuple[int, ...]], out_shape: tuple[int, ...]
     ) -> Explanation | None:

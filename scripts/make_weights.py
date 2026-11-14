@@ -8,7 +8,9 @@ Plain NumPy, run offline. Writes to ``src/nvzlab/weights/``:
   ``initial_*`` counterparts;
 - ``decision_tree_{dataset}_f{features}_{criterion}.npz``: the tree grown to depth 3 by
   ``nvzlab.models.decision_tree.grow`` as arrays ``feature``, ``threshold``, ``left``,
-  ``right``, ``counts``.
+  ``right``, ``counts``;
+- ``cnn.npz``: ``W_conv``, ``b_conv``, ``W_out``, ``b_out`` (full-batch gradient descent on
+  ``shapes`` through the model's own forward function and a ``Tape``) and ``initial_*``.
 
 Run from the repo root: ``python scripts/make_weights.py``.
 """
@@ -19,7 +21,9 @@ from pathlib import Path
 
 import numpy as np
 
-from nvzlab import datasets
+from nvzlab import datasets, ops
+from nvzlab.core.tape import Tape
+from nvzlab.models import cnn
 from nvzlab.models.decision_tree import CRITERIA, MAX_DEPTH, grow
 
 OUT = Path(__file__).resolve().parents[1] / "src" / "nvzlab" / "weights"
@@ -73,6 +77,40 @@ def mlp_accuracy(x: np.ndarray, y: np.ndarray, p: dict[str, np.ndarray]) -> floa
     return float(np.mean((h @ p["W2"] + p["b2"]).argmax(axis=1) == y))
 
 
+def fit_with_tape(
+    forward,
+    p: dict[str, np.ndarray],
+    x: np.ndarray,
+    y: np.ndarray,
+    lr: float,
+    epochs: int,
+    loss=ops.nll,
+) -> dict[str, np.ndarray]:
+    """Full-batch gradient descent using the model's own forward function and a ``Tape``."""
+    p = {k: v.copy() for k, v in p.items()}
+    for _ in range(epochs):
+        with Tape() as t:
+            for k, v in p.items():
+                t.watch(v, role="param", name=k)
+            grads = t.backward(loss(forward(x, p), y))
+        p = {k: v - lr * grads[k] for k, v in p.items()}
+    return p
+
+
+def accuracy(forward, p: dict[str, np.ndarray], x: np.ndarray, y: np.ndarray) -> float:
+    return float(np.mean(forward(x, p).argmax(axis=1) == y))
+
+
+def cnn_initial(seed: int = 3) -> dict[str, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    return {
+        "W_conv": rng.normal(0.0, np.sqrt(2.0 / 27), size=(4, 3, 3, 3)),
+        "b_conv": np.zeros(4),
+        "W_out": rng.normal(0.0, np.sqrt(2.0 / 64), size=(64, 3)),
+        "b_out": np.zeros(3),
+    }
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     for f in (1, 2):
@@ -88,6 +126,12 @@ def main() -> None:
     p = fit_mlp(ds.X, ds.y, p0)
     np.savez(OUT / "mlp.npz", **p, **{"initial_" + k: v for k, v in p0.items()})
     print(f"mlp: train accuracy={mlp_accuracy(ds.X, ds.y, p):.3f}")
+
+    ds = datasets.load("shapes")
+    p0 = cnn_initial()
+    p = fit_with_tape(cnn.forward, p0, ds.X, ds.y, lr=0.5, epochs=300)
+    np.savez(OUT / "cnn.npz", **p, **{"initial_" + k: v for k, v in p0.items()})
+    print(f"cnn: train accuracy={accuracy(cnn.forward, p, ds.X, ds.y):.3f}")
 
     for name, features in (("blobs", 1), ("blobs", 2), ("moons", 2)):
         ds = datasets.load(name, features=features)

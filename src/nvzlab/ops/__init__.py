@@ -9,6 +9,7 @@ array([0.37754067])
 """
 
 from nvzlab.ops.activations import relu, sigmoid, softmax, tanh
+from nvzlab.ops.conv import conv2d, flatten, maxpool2d
 from nvzlab.ops.linalg import add, linear, matmul, mul
 from nvzlab.ops.losses import bce, cross_entropy, nll
 from nvzlab.ops.reduce import mean, sum
@@ -17,9 +18,12 @@ from nvzlab.ops.tree import tree_predict
 __all__ = [
     "add",
     "bce",
+    "conv2d",
     "cross_entropy",
+    "flatten",
     "linear",
     "matmul",
+    "maxpool2d",
     "mean",
     "mul",
     "nll",

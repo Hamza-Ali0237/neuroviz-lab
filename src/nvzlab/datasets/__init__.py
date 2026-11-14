@@ -82,7 +82,36 @@ def moons(features: int = 2, seed: int = 0) -> Dataset:
     return Dataset("moons", x, y, ["x1", "x2"], ["0", "1"])
 
 
-_DATASETS = {"blobs": blobs, "moons": moons}
+def shapes(seed: int = 0) -> Dataset:
+    """90 RGB images of 8x8 pixels, layout (n, 3, 8, 8), values in [0, 1], three classes.
+
+    Each image shows one shape (a filled 4x4 square, a 4x4 ring or a 5x5 cross) at a random
+    position in a random colour over a dark, lightly noisy background.
+    """
+    rng = np.random.default_rng(seed)
+    n_per_class, size = 30, 8
+    masks = {
+        "square": np.ones((4, 4), dtype=bool),
+        "ring": np.pad(np.zeros((2, 2), dtype=bool), 1, constant_values=True),
+        "cross": np.zeros((5, 5), dtype=bool),
+    }
+    masks["cross"][2, :] = masks["cross"][:, 2] = True
+    x = np.zeros((3 * n_per_class, 3, size, size))
+    y = np.repeat(np.arange(3), n_per_class)
+    for i, label in enumerate(y):
+        mask = masks[list(masks)[label]]
+        r, c = rng.integers(0, size - mask.shape[0] + 1, size=2)
+        colour = rng.uniform(0.5, 1.0, size=3)
+        x[i, :, r : r + mask.shape[0], c : c + mask.shape[1]] = colour[:, None, None] * mask
+    x = np.clip(x + rng.normal(0.0, 0.05, size=x.shape), 0.0, 1.0)
+    order = rng.permutation(len(y))
+    x, y = x[order], y[order]
+    x.setflags(write=False)
+    y.setflags(write=False)
+    return Dataset("shapes", x, y, ["R", "G", "B"], list(masks))
+
+
+_DATASETS = {"blobs": blobs, "moons": moons, "shapes": shapes}
 
 
 def load(name: str, **options: int) -> Dataset:

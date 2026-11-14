@@ -153,3 +153,64 @@ def test_tree_predict():
         ops.tree_predict(x[:, :1], [1, -1, -1], *list(tree.values())[1:])
     with pytest.raises(ShapeError, match="tree_predict: expected counts"):
         ops.tree_predict(x, tree["feature"], tree["threshold"], tree["left"], tree["right"], [1])
+
+
+def _conv_reference(x, w, b, stride, padding):
+    xp = np.pad(x, ((0, 0), (0, 0), (padding, padding), (padding, padding)))
+    n, _, h, wd = xp.shape
+    co, _, kh, kw = w.shape
+    ho, wo = (h - kh) // stride + 1, (wd - kw) // stride + 1
+    out = np.zeros((n, co, ho, wo))
+    for i, o, r, c in np.ndindex(n, co, ho, wo):
+        patch = xp[i, :, r * stride : r * stride + kh, c * stride : c * stride + kw]
+        out[i, o, r, c] = (patch * w[o]).sum() + b[o]
+    return out
+
+
+def test_conv2d(rng):
+    x, w, b = rng.normal(size=(2, 3, 5, 5)), rng.normal(size=(4, 3, 3, 3)), rng.normal(size=4)
+    for stride, padding in ((1, 0), (1, 1), (2, 1), (2, 0)):
+        out = ops.conv2d(x, w, b, stride=stride, padding=padding)
+        np.testing.assert_allclose(out, _conv_reference(x, w, b, stride, padding))
+        gradcheck(ops.conv2d, [x, w, b], stride=stride, padding=padding)
+    assert ops.conv2d(x, w, b, padding=1).shape == (2, 4, 5, 5)
+    with pytest.raises(ShapeError, match="conv2d: expected x with 4 dimensions"):
+        ops.conv2d(x[0], w, b)
+    with pytest.raises(ShapeError, match=r"w with shape \(C_out, 3, kH, kW\)"):
+        ops.conv2d(x, rng.normal(size=(4, 2, 3, 3)), b)
+    with pytest.raises(ShapeError, match=r"b with shape \(4,\)"):
+        ops.conv2d(x, w, np.zeros(3))
+    with pytest.raises(ShapeError, match="kernel no larger than the padded image"):
+        ops.conv2d(x, rng.normal(size=(1, 3, 6, 6)), np.zeros(1))
+
+
+def test_maxpool2d_records_argmax_routing(rng):
+    x = rng.normal(size=(2, 3, 4, 4))
+    out = ops.maxpool2d(x)
+    assert out.shape == (2, 3, 2, 2)
+    np.testing.assert_allclose(out, x.reshape(2, 3, 2, 2, 2, 2).max(axis=(3, 5)))
+    gradcheck(ops.maxpool2d, [x])
+    gradcheck(ops.maxpool2d, [rng.normal(size=(1, 2, 6, 6))], size=3, stride=3)
+    gradcheck(ops.maxpool2d, [rng.normal(size=(1, 2, 5, 5))], size=3, stride=1)  # overlapping
+    with nvz.Tape() as t:
+        ops.maxpool2d(x)
+    argmax = np.array(t.nodes[0].attrs["argmax"])
+    assert argmax.shape == (2, 3, 2, 2) and argmax.dtype.kind == "i"
+    np.testing.assert_allclose(
+        np.take_along_axis(x.reshape(2, 3, 16), argmax.reshape(2, 3, 4), axis=-1).reshape(
+            out.shape
+        ),
+        out,
+    )
+    assert "argmax" in t.nodes[0].explain["text"]
+    with pytest.raises(ShapeError, match="tile the image exactly"):
+        ops.maxpool2d(rng.normal(size=(1, 1, 5, 5)))
+
+
+def test_flatten(rng):
+    x = rng.normal(size=(2, 3, 4, 4))
+    assert ops.flatten(x).shape == (2, 48)
+    np.testing.assert_array_equal(ops.flatten(x), x.reshape(2, 48))
+    gradcheck(ops.flatten, [x])
+    with pytest.raises(ShapeError, match="flatten: expected x with at least 2 dimensions"):
+        ops.flatten(np.zeros(3))

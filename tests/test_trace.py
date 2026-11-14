@@ -17,6 +17,9 @@ CASES += [
     dict(model="mlp", kind=k, samples=s) for k in ("predict", "train") for s in ("single", "batch")
 ]
 CASES += [
+    dict(model="cnn", kind=k, samples=s) for k in ("predict", "train") for s in ("single", "batch")
+]
+CASES += [
     dict(model="decision_tree", kind="predict", samples=s, dataset=d, features=f, criterion=c)
     for s in ("single", "batch")
     for d, f in (("blobs", 1), ("blobs", 2), ("moons", 2))
@@ -45,12 +48,14 @@ def test_schema_valid_for_builtin(case):
         assert tr.mode["samples"] == case["samples"]
     else:  # a self-trained model learns from the whole dataset
         assert tr.mode == {"samples": "batch", "n_samples": 120, "n_features": case["features"]}
-    assert tr.mode["n_features"] == case.get("features", 2)
+    assert tr.mode["n_features"] == {"cnn": 192}.get(model, case.get("features", 2))
     assert tr.model["provenance"] == (
         "builtin-pretrained" if case["kind"] == "predict" else "builtin-initial"
     )
-    assert tr.dataset["name"] == case.get("dataset", "moons" if model == "mlp" else "blobs")
-    assert len(tr.dataset["features"]) == tr.mode["n_features"]
+    default_ds = {"mlp": "moons", "cnn": "shapes"}.get(model, "blobs")
+    assert tr.dataset["name"] == case.get("dataset", default_ds)
+    if model != "cnn":  # image datasets name their channels, not every pixel
+        assert len(tr.dataset["features"]) == tr.mode["n_features"]
     assert tr.steps and all(s.layer is None or isinstance(s.layer, str) for s in tr.steps)
 
 
@@ -59,6 +64,7 @@ def test_schema_valid_for_builtin(case):
     [
         dict(model="logistic_regression", kind="train", samples="batch", iterations=3),
         dict(model="mlp", kind="train", samples="batch", iterations=3),
+        dict(model="cnn", kind="train", samples="batch", iterations=2),
         dict(model="decision_tree", kind="train", dataset="moons", iterations=3),
         dict(model="decision_tree", kind="predict", samples="batch", criterion="entropy"),
     ],

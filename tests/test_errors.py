@@ -20,7 +20,8 @@ def test_unknown_dataset_and_op():
     with pytest.raises(UnknownNameError, match="Unknown op 'sigmod'. Did you mean 'sigmoid'"):
         nvz.core.registry.get("sigmod")
     with pytest.raises(
-        UnknownNameError, match="Available models: 'decision_tree', 'logistic_regression', 'mlp'"
+        UnknownNameError,
+        match="Available models: 'cnn', 'decision_tree', 'logistic_regression', 'mlp'",
     ):
         nvz.models.load("zzz")
 

@@ -15,6 +15,10 @@
 - Built-in `mlp` (2 -> 4 ReLU -> 2 softmax, cross-entropy on `moons`) with layer-labelled steps and pretrained and initial weights.
 - Built-in `decision_tree` (depth 3, Gini or entropy, `blobs` or `moons`): predict traces follow each sample from the root to a leaf with `tree_structure`, `node_test` and `leaf` events; train traces grow the tree one depth level per iteration with `split_search` (every candidate), `split_chosen`, `node_created` and `leaf` events. Models can record their own non-gradient training by overriding `Model.train`.
 - Ops `nll` (cross-entropy of probabilities) and `tree_predict` (non-differentiable).
+- Ops `conv2d` (NCHW, stride and padding), `maxpool2d` (records the winning position of every window as `attrs["argmax"]` on the forward node, so the backward routing is visible) and `flatten`, each with forward and backward explanations and gradient checks.
+- `shapes` dataset: 90 synthetic 8x8 RGB images (square, ring, cross) at random positions and colours.
+- Built-in `cnn` (conv 3->4 3x3 -> ReLU -> max pool 2x2 -> flatten -> linear 64->3 -> softmax, cross-entropy on `shapes`) with layer-labelled steps, one context example image per class, pretrained and initial weights, parity with PyTorch.
+- Ops can attach extra data to their recorded node through `Op.node_attrs(ctx)`.
 - `nvz.step(..., layer=...)`: an optional layer label on steps, copied onto the mirrored backward steps and stored in the trace (`steps[].layer`).
 - `nvz.list_models()` returns a one-line description and the supported options per model.
 - CLI: `nvzlab list`, `nvzlab demo <model>` (opens the viewer; `--json`/`--html` to write a file), `nvzlab open trace.json`.

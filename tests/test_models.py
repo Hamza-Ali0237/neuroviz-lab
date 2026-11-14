@@ -106,7 +106,8 @@ def test_model_subclass_and_custom_loss_callable():
 
 def test_describe_and_lists():
     models = nvz.list_models()
-    assert list(models) == ["decision_tree", "logistic_regression", "mlp"]
+    assert list(models) == ["cnn", "decision_tree", "logistic_regression", "mlp"]
+    assert models["cnn"].endswith("cross-entropy on shapes [samples: single, batch]")
     assert models["mlp"] == (
         "2 inputs -> 4 hidden (ReLU) -> 2 classes (softmax); cross-entropy on moons "
         "[samples: single, batch; features: 2]"
@@ -115,7 +116,7 @@ def test_describe_and_lists():
         "[samples: single, batch; features: 1, 2; dataset: blobs, moons; criterion: gini, entropy]"
     )
     assert models["logistic_regression"].endswith("[samples: single, batch; features: 1, 2]")
-    assert nvz.list_datasets() == ["blobs", "moons"]
+    assert nvz.list_datasets() == ["blobs", "moons", "shapes"]
     assert {"linear", "sigmoid", "bce", "softmax", "nll", "tree_predict"} <= set(nvz.list_ops())
     d = nvz.models.load("logistic_regression", features=1).describe()
     assert "param w: shape (1,)" in d and "loss: bce" in d and "features: 1, 2" in d

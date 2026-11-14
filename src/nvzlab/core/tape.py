@@ -174,7 +174,7 @@ class Tape:
             phase=self.phase,
             inputs=list(in_ids),
             outputs=[out_id],
-            attrs=_jsonable(attrs),
+            attrs=_jsonable({**attrs, **op.node_attrs(ctx)}),
             step=step.index,
             differentiable=op.differentiable,
             explain=op.explain(dict(attrs), in_shapes, tuple(out.shape)),
