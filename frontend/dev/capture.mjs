@@ -2,8 +2,11 @@
 // a .webm (plus .mp4 when ffmpeg is on PATH) and a poster .png.
 // Usage: node dev/capture.mjs <trace.json> --size square|vertical --dim 2d|3d --out <file>
 //        [--scene loss|probability|network|surface|regions|tensors] [--seconds 2] [--theme light|dark]
+//        [--steps a:b]      play (and loop) only steps a..b inclusive
+//        [--poster-step k]  take the poster .png from step k (default: the first step played)
 //        [--frames]  write one PNG per step to <out>.frames/ instead of a video (for machines where
-//                    Playwright cannot record video); assemble with dev/frames_to_gif.py
+//                    Playwright cannot record video); assemble with dev/frames_to_gif.py. With
+//                    ffmpeg on PATH an .mp4 (H.264, yuv420p) is also written from the frames.
 // Needs the built bundle (npm run build) and Chrome. Headless WebGL: the same flags as screenshots.mjs.
 import { chromium } from "playwright";
 import { spawnSync } from "node:child_process";
@@ -25,6 +28,12 @@ const seconds = Number(opt("seconds", "2"));
 const theme = opt("theme", "light");
 const out = opt("out", "");
 const frames = args.includes("--frames");
+const stepsOpt = opt("steps", "");
+const stepRange = /^(\d+):(\d+)$/.test(stepsOpt) ? stepsOpt.split(":").map(Number) : null;
+if (stepsOpt && !stepRange) {
+  console.error(`--steps expects a:b (got ${stepsOpt})`);
+  process.exit(2);
+}
 // Frames mode screenshots every step once; a 3D screenshot can take seconds in software WebGL,
 // so the page is paced slowly and the GIF gets the requested `seconds` per step instead.
 const pageSeconds = frames ? Math.max(seconds, 8) : seconds;
@@ -49,7 +58,14 @@ const page_html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><t
 const work = await mkdtemp(join(tmpdir(), "nvz-capture-"));
 const pagePath = join(work, "page.html");
 await writeFile(pagePath, page_html);
-const url = `${pathToFileURL(pagePath).href}?capture=${size}&dim=${dim}&seconds=${pageSeconds}${scene ? `&scene=${scene}` : ""}`;
+const steps = trace.steps.length;
+const [firstStep, lastStep] = stepRange ? [Math.min(stepRange[0], steps - 1), Math.min(stepRange[1], steps - 1)] : [0, steps - 1];
+const posterStep = Number(opt("poster-step", String(firstStep)));
+if (posterStep < firstStep || posterStep > lastStep) {
+  console.error(`--poster-step ${posterStep} is outside the played range ${firstStep}:${lastStep}`);
+  process.exit(2);
+}
+const url = `${pathToFileURL(pagePath).href}?capture=${size}&dim=${dim}&seconds=${pageSeconds}${scene ? `&scene=${scene}` : ""}${stepRange ? `&steps=${firstStep}:${lastStep}` : ""}`;
 
 const browser = await chromium.launch({
   channel: "chrome",
@@ -70,9 +86,8 @@ if (dim === "3d") await page.waitForSelector(".nvz-canvas3d canvas");
 await page.waitForTimeout(400);
 const outBase = resolve(out).replace(/\.(webm|mp4)$/, "");
 await mkdir(dirname(outBase), { recursive: true });
-if (!frames) await page.screenshot({ path: `${outBase}.png` });
-// One full loop: every step shown once, the hold on the last step, and the wrap to step 0.
-const steps = trace.steps.length;
+// One full loop: every step shown once, the hold on the last step, and the wrap to the first.
+const played = lastStep - firstStep + 1;
 const looped = () => Number(document.querySelector(".nvz-capture")?.getAttribute("data-loop")) >= 1;
 const state = () => {
   const el = document.querySelector(".nvz-capture");
@@ -94,10 +109,8 @@ if (frames) {
     await page.waitForTimeout(200); // let the scene settle after the step change
     const file = join(dir, `${String(stepNow).padStart(3, "0")}.png`);
     await page.screenshot({ path: file });
-    if (seen === -1) {
-      if (stepNow !== 0) errors.push(`first frame caught step ${stepNow}, not 0; raise --seconds`);
-      await copyFile(file, `${outBase}.png`); // poster = step 0
-    }
+    if (seen === -1 && stepNow !== firstStep) errors.push(`first frame caught step ${stepNow}, not ${firstStep}; raise --seconds`);
+    if (stepNow === posterStep) await copyFile(file, `${outBase}.png`);
     const [after] = await page.evaluate(state);
     if (after !== stepNow) errors.push(`frame for step ${stepNow} finished during step ${after}; raise --seconds`);
     seen = stepNow;
@@ -105,7 +118,12 @@ if (frames) {
   await context.close();
   written.push(dir);
 } else {
-  await page.waitForFunction(looped, null, { timeout: (steps * seconds + 5) * 1000 + 10_000, polling: 100 });
+  // Poster: the first frame of the poster step.
+  const atPoster = (k) => Number(document.querySelector(".nvz-capture")?.getAttribute("data-step")) === k;
+  await page.waitForFunction(atPoster, posterStep, { timeout: (played * seconds + 5) * 1000 + 10_000, polling: 50 });
+  await page.waitForTimeout(250);
+  await page.screenshot({ path: `${outBase}.png` });
+  await page.waitForFunction(looped, null, { timeout: (played * seconds + 5) * 1000 + 10_000, polling: 100 });
   await page.waitForTimeout(300);
   const video = page.video();
   await context.close();
@@ -116,14 +134,25 @@ if (frames) {
 await browser.close();
 await rm(work, { recursive: true, force: true });
 const webm = written.find((f) => f.endsWith(".webm"));
-const ffmpeg = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" });
-if (webm && ffmpeg.status === 0) {
-  const mp4 = `${outBase}.mp4`;
-  const r = spawnSync("ffmpeg", ["-y", "-i", webm, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4], { stdio: "ignore" });
+const ffmpeg = spawnSync("ffmpeg", ["-version"], { stdio: "ignore" }).status === 0;
+const mp4 = `${outBase}.mp4`;
+const h264 = ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-movflags", "+faststart"];
+if (ffmpeg && webm) {
+  const r = spawnSync("ffmpeg", ["-y", "-i", webm, ...h264, mp4], { stdio: "ignore" });
   if (r.status === 0) written.push(mp4);
   else console.warn("ffmpeg failed; keeping the .webm only");
-} else if (webm) console.log("ffmpeg not found; wrote .webm only");
-console.log(`${basename(tracePath)} → ${size} ${dim}${scene ? ` ${scene}` : ""}: ${steps} steps × ${seconds}s`);
+} else if (ffmpeg && frames) {
+  // Frames → video: each frame held for `seconds` (the last one also gets the loop hold); even dimensions for yuv420p.
+  const dir = `${outBase}.frames`;
+  const r = spawnSync(
+    "ffmpeg",
+    ["-y", "-framerate", `1/${seconds}`, "-start_number", String(firstStep), "-i", join(dir, "%03d.png"), "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-r", "30", ...h264, mp4],
+    { stdio: "ignore" },
+  );
+  if (r.status === 0) written.push(mp4);
+  else console.warn("ffmpeg failed; keeping the frames only");
+} else if (!ffmpeg) console.log(`ffmpeg not found; no .mp4 written`);
+console.log(`${basename(tracePath)} → ${size} ${dim}${scene ? ` ${scene}` : ""}: steps ${firstStep}..${lastStep} (${played} of ${steps}) × ${seconds}s, poster from step ${posterStep}`);
 for (const f of written) console.log(`  ${f}`);
 if (errors.length) {
   console.error("console errors:\n" + errors.join("\n"));

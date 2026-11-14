@@ -9,10 +9,10 @@ const HOLD_MS = 1000;
 /**
  * Capture mode: a fixed-size stage scaled to fit the window, no controls, a slim title
  * strip, the scene, and its caption in large type. Auto-plays every step (`seconds` each),
- * holds on the last one, then loops back to step 0. `data-loop` counts completed loops so
- * a recorder knows when one full pass is on tape.
+ * holds on the last one, then loops back to the first (`range` restricts the steps played).
+ * `data-loop` counts completed loops so a recorder knows when one full pass is on tape.
  */
-export function CaptureFrame({ seconds }: { seconds: number }) {
+export function CaptureFrame({ seconds, range }: { seconds: number; range: [number, number] }) {
   const { trace, stepIndex, dimension, capture } = useAppState();
   const dispatch = useDispatch();
   const [w, h] = CAPTURE_SIZES[capture ?? "square"];
@@ -24,17 +24,17 @@ export function CaptureFrame({ seconds }: { seconds: number }) {
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, [w, h]);
-  const last = trace.steps.length - 1;
+  const [first, last] = range;
   useEffect(() => {
     const atEnd = stepIndex >= last;
     const id = window.setTimeout(() => {
       if (atEnd) {
         setLoops((n) => n + 1);
-        dispatch({ type: "goto", step: 0 });
+        dispatch({ type: "goto", step: first });
       } else dispatch({ type: "next" });
     }, atEnd ? seconds * 1000 + HOLD_MS : seconds * 1000);
     return () => window.clearTimeout(id);
-  }, [stepIndex, last, seconds, dispatch]);
+  }, [stepIndex, first, last, seconds, dispatch]);
   const step = trace.steps[stepIndex];
   return (
     <div className="nvz-capture-root">

@@ -73,16 +73,17 @@ export function reducer(s: AppState, a: Action): AppState {
 const StateCtx = createContext<AppState | null>(null);
 const DispatchCtx = createContext<Dispatch<Action> | null>(null);
 
-export function StoreProvider({ trace, dim = "2d", capture = null, scene = null, children }: {
+export function StoreProvider({ trace, dim = "2d", capture = null, scene = null, initialStep = 0, children }: {
   trace: TraceView;
   dim?: "2d" | "3d";
   capture?: Capture;
   scene?: string | null;
+  initialStep?: number;
   children: ReactNode;
 }) {
   const [state, dispatch] = useReducer(reducer, {
     trace,
-    stepIndex: 0,
+    stepIndex: initialStep,
     playing: false,
     speed: 1,
     selection: EMPTY,

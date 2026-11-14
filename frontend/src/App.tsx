@@ -30,16 +30,20 @@ function Frame() {
   );
 }
 
-export function App({ trace, dim = "2d", capture = null, captureSeconds = 2, scene = null }: {
+export function App({ trace, dim = "2d", capture = null, captureSeconds = 2, scene = null, steps = null }: {
   trace: TraceView;
   dim?: "2d" | "3d";
   capture?: Capture;
   captureSeconds?: number;
   scene?: string | null;
+  /** Capture mode: play only this inclusive step range. */
+  steps?: [number, number] | null;
 }) {
+  const last = trace.steps.length - 1;
+  const range: [number, number] = steps ? [Math.max(0, Math.min(last, steps[0])), Math.max(0, Math.min(last, steps[1]))] : [0, last];
   return (
-    <StoreProvider trace={trace} dim={dim} capture={capture} scene={scene}>
-      {capture ? <CaptureFrame seconds={captureSeconds} /> : <Frame />}
+    <StoreProvider trace={trace} dim={dim} capture={capture} scene={scene} initialStep={capture ? range[0] : 0}>
+      {capture ? <CaptureFrame seconds={captureSeconds} range={range} /> : <Frame />}
     </StoreProvider>
   );
 }

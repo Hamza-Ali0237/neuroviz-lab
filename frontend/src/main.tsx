@@ -6,6 +6,7 @@ import { App } from "./App";
 import { loadTrace } from "./trace/load";
 import type { TraceRecord } from "./trace/types";
 import type { Capture } from "./state/store";
+import { setSceneHeight } from "./renderers/r2d/LRScene";
 
 async function readTrace(): Promise<TraceRecord> {
   // Exported HTML embeds the trace in a JSON script tag; `npm run dev` fetches the sample.
@@ -26,13 +27,18 @@ const captureFlag = flag("capture", "capture");
 const capture: Capture = captureFlag === "square" || captureFlag === "vertical" ? captureFlag : null;
 const seconds = Number(flag("seconds", "captureSeconds")) || 2;
 const scene = flag("scene", "scene") || null;
+// ?steps=a:b plays (and loops) only that step range.
+const stepsFlag = /^(\d+):(\d+)$/.exec(flag("steps", "steps"));
+const steps: [number, number] | null = stepsFlag ? [Number(stepsFlag[1]), Number(stepsFlag[2])] : null;
+// A vertical stage gets a taller chart (3:4 instead of 7:5) so the scene fills it.
+if (capture === "vertical") setSceneHeight(560);
 
 const root = createRoot(rootEl);
 readTrace()
   .then((raw) => {
     root.render(
       <StrictMode>
-        <App trace={loadTrace(raw)} dim={dim} capture={capture} captureSeconds={seconds} scene={scene} />
+        <App trace={loadTrace(raw)} dim={dim} capture={capture} captureSeconds={seconds} scene={scene} steps={steps} />
       </StrictMode>,
     );
   })
