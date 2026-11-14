@@ -1,9 +1,9 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import { useAppState, useDispatch } from "../../state/store";
 import { fmt } from "../../format";
-import { unflatIndex } from "../../trace/load";
+import { flatIndex, unflatIndex } from "../../trace/load";
 import { Axes, Label, SIZE, Surface, bilinear, cellColor, orbitPosition, span, useTheme } from "./common";
 
 export type SceneId = "probability" | "loss" | "tensors";
@@ -62,7 +62,7 @@ export function ProbabilitySurface() {
   return (
     <group position={[0, -SIZE / 4, 0]}>
       <Axes x={{ name: names[0], lo, hi }} z={{ name: names[1], lo, hi }} y={{ name: "p", lo: 0, hi: 1 }} colors={theme} />
-      <Surface xs={scene} zs={scene} heights={heights} color={color} opacity={0.85} />
+      <Surface xs={scene} zs={scene} heights={heights} color={color} opacity={0.8} />
       {line.length === 2 && (
         <Line points={line.map(([x1, x2]) => [sx(x1), sy(0.5) + 0.01, sx(x2)] as [number, number, number])} color={theme.fg} lineWidth={2} />
       )}
@@ -81,6 +81,10 @@ export function ProbabilitySurface() {
         const current = i === sampleIndex;
         return (
           <group key={i}>
+            <mesh position={[sx(x1), 0.02, sx(x2)]}>
+              <sphereGeometry args={[0.06, 10, 10]} />
+              <meshStandardMaterial color={cls(y?.values?.[i])} transparent opacity={0.45} />
+            </mesh>
             <Line points={[[sx(x1), 0, sx(x2)], [sx(x1), sy(pi), sx(x2)]]} color={theme.muted} lineWidth={1} dashed dashSize={0.08} gapSize={0.06} />
             <mesh
               position={[sx(x1), sy(pi), sx(x2)]}
@@ -116,7 +120,9 @@ export function LossLandscape() {
   const hi1 = ax1[ax1.length - 1];
   const s0 = span(lo0, hi0);
   const s1 = span(lo1, hi1);
-  const { min, max } = grid.stats;
+  const lossPath = trace.context("loss_path")?.values ?? null;
+  const min = Math.min(grid.stats.min, ...(lossPath ?? []));
+  const max = Math.max(grid.stats.max, ...(lossPath ?? []));
   const sy = (l: number) => ((l - min) / (max - min || 1)) * (SIZE / 2);
   const xs = useMemo(() => Array.from(ax0, s0), [ax0, s0]);
   const zs = useMemo(() => Array.from(ax1, s1), [ax1, s1]);
@@ -133,32 +139,125 @@ export function LossLandscape() {
   };
   const updates = trace.raw.events.filter((e) => e.kind === "sgd_update" && e.payload.param === "w");
   const path = [point(trace.paramsAt(-1)), ...updates.map((e) => point(trace.paramsAt(e.step)))];
-  const current = point(trace.paramsAt(stepIndex));
-  const toScene = ([a, b]: [number, number]): [number, number, number] => {
-    const l = bilinear(grid.values!, ax0, ax1, a, b);
+  const reached = updates.filter((e) => e.step <= stepIndex).length;
+  // Heights: the exact loss recorded for path point k (loss_path); older traces without it
+  // fall back to interpolating the grid.
+  const toScene = ([a, b]: [number, number], k: number): [number, number, number] => {
+    const l = lossPath && k < lossPath.length ? lossPath[k] : bilinear(grid.values!, ax0, ax1, a, b);
     return [s0(a), l === null ? 0 : sy(l) + 0.02, s1(b)];
   };
-  const reached = updates.filter((e) => e.step <= stepIndex).length;
+  const scenePath = path.map(toScene);
+  const current = scenePath[Math.min(reached, scenePath.length - 1)];
+  const currentLoss = lossPath && reached < lossPath.length ? lossPath[reached] : null;
   return (
     <group position={[0, -SIZE / 4, 0]}>
       <Axes x={{ name: n0, lo: lo0, hi: hi0 }} z={{ name: n1, lo: lo1, hi: hi1 }} y={{ name: "loss", lo: min, hi: max }} colors={theme} />
       <Surface xs={xs} zs={zs} heights={heights} color={color} opacity={0.9} />
-      {path.length > 1 && <Line points={path.map(toScene)} color={theme.muted} lineWidth={1.5} dashed dashSize={0.1} gapSize={0.06} />}
-      {reached > 0 && <Line points={path.slice(0, reached + 1).map(toScene)} color={theme.fg} lineWidth={3} />}
-      {path.length > 0 && <Label at={[toScene(path[0])[0], toScene(path[0])[1] - 0.2, toScene(path[0])[2]]} muted>start</Label>}
-      {path.map((pt, k) => (
-        <mesh key={k} position={toScene(pt)}>
+      {scenePath.length > 1 && <Line points={scenePath} color={theme.muted} lineWidth={1.5} dashed dashSize={0.1} gapSize={0.06} />}
+      {reached > 0 && <Line points={scenePath.slice(0, reached + 1)} color={theme.fg} lineWidth={3} />}
+      {scenePath.length > 0 && <Label at={[scenePath[0][0], scenePath[0][1] - 0.2, scenePath[0][2]]} muted>start</Label>}
+      {scenePath.map((pt, k) => (
+        <mesh key={k} position={pt}>
           <sphereGeometry args={[0.045, 12, 12]} />
           <meshStandardMaterial color={k <= reached ? theme.fg : theme.muted} />
         </mesh>
       ))}
-      <mesh position={toScene(current)}>
+      <mesh position={current}>
         <sphereGeometry args={[0.09, 16, 16]} />
         <meshStandardMaterial color={theme.accent} emissive={theme.accent} emissiveIntensity={0.4} />
       </mesh>
-      <Label at={[toScene(current)[0], toScene(current)[1] + 0.35, toScene(current)[2]]}>
-        {`${n0} = ${fmt(current[0])}, ${n1} = ${fmt(current[1])}`}
+      <Label at={[current[0], current[1] + 0.35, current[2]]}>
+        {`${n0} = ${fmt(path[Math.min(reached, path.length - 1)][0])}, ${n1} = ${fmt(path[Math.min(reached, path.length - 1)][1])}${currentLoss === null ? "" : ` · loss = ${fmt(currentLoss)}`}`}
       </Label>
+    </group>
+  );
+}
+
+/** One tensor as an instanced grid of cells; a wireframe box marks the selected cell. */
+function CellPlane({ t, step, z, cell, gap, active }: {
+  t: { id: string; shape: number[]; size: number; values: Float32Array | null; stats: { min: number; max: number } };
+  step: number;
+  z: number;
+  cell: number;
+  gap: number;
+  active: boolean;
+}) {
+  const { trace, selection, sampleIndex } = useAppState();
+  const dispatch = useDispatch();
+  const theme = useTheme();
+  const ref = useRef<THREE.InstancedMesh>(null);
+  const cols = t.shape.length ? t.shape[t.shape.length - 1] : 1;
+  const rows = t.size / cols;
+  const pitch = cell + gap;
+  const w = cols * pitch;
+  const h = rows * pitch;
+  const absMax = Math.max(Math.abs(t.stats.min), Math.abs(t.stats.max), 1e-12);
+  const perSample = t.shape.length >= 1 && t.shape[0] === trace.raw.mode.n_samples && trace.raw.mode.n_samples > 1;
+  const selectedFlat = selection.tensorId === t.id && selection.index ? flatIndex(t.shape, selection.index) : -1;
+  const place = (flat: number): [number, number, number] => [(flat % cols - (cols - 1) / 2) * pitch, h - (Math.floor(flat / cols) + 0.5) * pitch, 0];
+  const values = t.values;
+  useLayoutEffect(() => {
+    const m = ref.current;
+    if (!m || !values) return;
+    const o = new THREE.Object3D();
+    for (let flat = 0; flat < values.length; flat++) {
+      const [px, py] = place(flat);
+      const isSample = perSample && unflatIndex(t.shape, flat)[0] === sampleIndex;
+      o.position.set(px, py, 0);
+      o.scale.set(1, 1, flat === selectedFlat ? 0.8 : 0.3);
+      o.updateMatrix();
+      m.setMatrixAt(flat, o.matrix);
+      const c = cellColor(values[flat], absMax, theme.panel);
+      if (flat === selectedFlat) c.lerp(theme.sel, 0.6);
+      else if (isSample && active) c.lerp(theme.accent, 0.25);
+      m.setColorAt(flat, c);
+    }
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  }); // every render: cheap (one loop), and selection/sample/theme all feed the colours
+  if (!values) return null;
+  const select = (flat: number) => {
+    const idx = unflatIndex(t.shape, flat);
+    dispatch({ type: "select", selection: { tensorId: t.id, index: idx } });
+    if (perSample) dispatch({ type: "sample", index: idx[0] });
+  };
+  // Value labels: the whole plane when it is current and the cells are big enough to hold
+  // the text; otherwise only the selected cell, so labels never spill over plane edges.
+  const labelAll = active && values.length <= 64 && cell >= 0.3;
+  const labelled = labelAll ? Array.from(values, (_, i) => i) : selectedFlat >= 0 ? [selectedFlat] : [];
+  return (
+    <group position={[0, 0.2, z]}>
+      <Label at={[0, h + 0.3, 0]} muted={!active}>
+        {`${trace.steps[step].title} · ${trace.label(t.id)} (${t.shape.join(", ")})`}
+      </Label>
+      <instancedMesh
+        key={`${t.id}:${values.length}`}
+        ref={ref}
+        args={[undefined, undefined, values.length]}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (e.instanceId !== undefined) select(e.instanceId);
+        }}
+      >
+        <boxGeometry args={[cell, cell, cell]} />
+        <meshStandardMaterial transparent opacity={active ? 1 : 0.3} />
+      </instancedMesh>
+      {selectedFlat >= 0 && (
+        <mesh position={place(selectedFlat)}>
+          <boxGeometry args={[cell * 1.08, cell * 1.08, cell * 0.85]} />
+          <meshBasicMaterial color={theme.fg} wireframe />
+        </mesh>
+      )}
+      {labelled.map((flat) => {
+        const [px, py] = place(flat);
+        const idx = unflatIndex(t.shape, flat);
+        return (
+          <Label key={flat} at={[px, py, cell * 0.5]} onClick={() => select(flat)} title={`${trace.label(t.id)}[${idx.join(", ")}] = ${values[flat]}`}>
+            <span className="nvz-3d-value">{fmt(values[flat])}</span>
+          </Label>
+        );
+      })}
+      <Line points={[[-w / 2, 0, 0], [w / 2, 0, 0], [w / 2, h, 0], [-w / 2, h, 0], [-w / 2, 0, 0]]} color={active ? theme.fg : theme.border} lineWidth={active ? 2 : 1} />
     </group>
   );
 }
@@ -166,10 +265,11 @@ export function LossLandscape() {
 /**
  * Generic view for any trace: each forward step's output tensor as a grid of coloured cells,
  * stacked along the depth axis in step order. The current step's tensors are highlighted.
+ * Instanced: a CNN-sized trace (tens of tensors, hundreds of values each) stays one draw
+ * call per tensor.
  */
 export function TensorStack() {
-  const { trace, stepIndex, selection, sampleIndex } = useAppState();
-  const dispatch = useDispatch();
+  const { trace, stepIndex } = useAppState();
   const theme = useTheme();
   const outs = trace.forwardOutputs();
   // On a loss, backward or update step, append that step's own tensors (gradients, updated
@@ -186,68 +286,16 @@ export function TensorStack() {
     return [t.size / cols, cols] as const;
   };
   const maxDim = Math.max(1, ...outs.map(({ tensor }) => Math.max(...dims(tensor))));
-  const cell = Math.min(0.6, (SIZE * 0.9) / maxDim);
+  const cell = Math.min(0.6, (SIZE * 0.9) / maxDim / 1.2);
   const gap = cell * 0.2;
   const depth = outs.length > 1 ? Math.min(1.4, SIZE / (outs.length - 1)) : 0;
   const z0 = (-(outs.length - 1) * depth) / 2;
-  // ponytail: one mesh per cell; switch to instancedMesh if a tensor exceeds a few thousand cells.
   return (
     <group position={[0, -SIZE / 4, 0]}>
       <gridHelper args={[SIZE, 8, theme.border, theme.border]} />
-      {outs.map(({ step, tensor: t }, k) => {
-        const [rows, cols] = dims(t);
-        const absMax = Math.max(Math.abs(t.stats.min), Math.abs(t.stats.max), 1e-12);
-        const active = step === stepIndex;
-        const z = z0 + k * depth;
-        const w = cols * (cell + gap);
-        const h = rows * (cell + gap);
-        const perSample = t.shape.length >= 1 && t.shape[0] === trace.raw.mode.n_samples && trace.raw.mode.n_samples > 1;
-        return (
-          <group key={t.id} position={[0, 0.2, z]}>
-            <Label at={[0, h + 0.3, 0]} muted={!active}>
-              {`${trace.steps[step].title} · ${trace.label(t.id)} (${t.shape.join(", ")})`}
-            </Label>
-            {t.values
-              ? Array.from(t.values, (v, flat) => {
-                  const idx = unflatIndex(t.shape, flat);
-                  const r = Math.floor(flat / cols);
-                  const c = flat % cols;
-                  const sel = selection.tensorId === t.id && selection.index?.join(",") === idx.join(",");
-                  const sample = perSample && idx[0] === sampleIndex;
-                  const select = () => {
-                    dispatch({ type: "select", selection: { tensorId: t.id, index: idx } });
-                    if (perSample) dispatch({ type: "sample", index: idx[0] });
-                  };
-                  return (
-                    <mesh
-                      key={flat}
-                      position={[(c - (cols - 1) / 2) * (cell + gap), h - (r + 0.5) * (cell + gap), 0]}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        select();
-                      }}
-                    >
-                      <boxGeometry args={[cell, cell, sel ? cell * 0.8 : cell * 0.3]} />
-                      <meshStandardMaterial
-                        color={cellColor(v, absMax, theme.panel)}
-                        transparent
-                        opacity={active ? 1 : 0.3}
-                        emissive={sel ? theme.sel : sample && active ? theme.accent : new THREE.Color(0)}
-                        emissiveIntensity={sel ? 0.7 : 0.25}
-                      />
-                      {active && (
-                        <Label at={[0, 0, cell * 0.5]} onClick={select} title={`${trace.label(t.id)}[${idx.join(", ")}] = ${v}`}>
-                          <span className="nvz-3d-value">{fmt(v)}</span>
-                        </Label>
-                      )}
-                    </mesh>
-                  );
-                })
-              : null}
-            <Line points={[[-w / 2, 0, 0], [w / 2, 0, 0], [w / 2, h, 0], [-w / 2, h, 0], [-w / 2, 0, 0]]} color={active ? theme.fg : theme.border} lineWidth={active ? 2 : 1} />
-          </group>
-        );
-      })}
+      {outs.map(({ step, tensor: t }, k) => (
+        <CellPlane key={t.id} t={t} step={step} z={z0 + k * depth} cell={cell} gap={gap} active={step === stepIndex} />
+      ))}
     </group>
   );
 }
@@ -278,7 +326,10 @@ export function sceneCaption(id: SceneId, trace: ReturnType<typeof useAppState>[
   }
   if (id === "loss") {
     const note = trace.context("loss_landscape")?.note ?? "";
-    return `Height and colour = mean loss on the recorded grid (low to high). Position = the two parameters. Marker: the parameters current at this step; dots and line: the path over iterations. Marker and path heights are bilinear interpolations of the grid, not separately computed losses. ${note}`;
+    const exact = trace.context("loss_path")
+      ? "Marker and path heights are the exact losses recorded at each visited parameter set (loss_path), computed with the same samples and loss function."
+      : "Marker and path heights are bilinear interpolations of the grid, not separately computed losses.";
+    return `Height and colour = mean loss on the recorded grid (low to high). Position = the two parameters. Marker: the parameters current at this step; dots and line: the path over iterations. ${exact} ${note}`;
   }
   return "One grid per forward-step output, in step order along the depth axis. Each cell is one value: colour = the 2D diverging scale (blue positive, orange negative, intensity relative to the tensor's max |value|). Position = row/column in the tensor. Current step highlighted, others dimmed. Click a cell to select it.";
 }

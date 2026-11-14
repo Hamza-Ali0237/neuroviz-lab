@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import * as THREE from "three";
 import { Html } from "@react-three/drei";
-import { NEG_RGB, POS_RGB, tintAlpha } from "../../format";
+import { Line } from "@react-three/drei";
+import { NEG_RGB, POS_RGB, fmt, ticks, tintAlpha } from "../../format";
 
 /** Side length of the cube every scene is drawn into (axes map their range onto it). */
 export const SIZE = 4;
@@ -113,7 +114,11 @@ export function Label({ at, children, muted, onClick, title }: {
   );
 }
 
-/** Floor grid plus the three axis names with their min/max values at the ends. */
+/**
+ * Floor grid and the three axes drawn on the cube's edges: x along the front floor edge,
+ * z along the right floor edge, y up the back-left corner. Ticks are "nice" values inside
+ * each range; titles sit just outside the edge, never in mid-air.
+ */
 export function Axes({ x, z, y, colors }: {
   x: { name: string; lo: number; hi: number };
   z: { name: string; lo: number; hi: number };
@@ -121,19 +126,40 @@ export function Axes({ x, z, y, colors }: {
   colors: { border: THREE.Color; muted: THREE.Color };
 }) {
   const h = SIZE / 2;
-  const f = (v: number) => (Math.abs(v) >= 100 ? v.toFixed(0) : v.toPrecision(3)).replace("-", "−");
+  const eps = 1e-9;
+  const inside = (a: { lo: number; hi: number }, n: number) => ticks(a.lo, a.hi, n).filter((v) => v >= a.lo - eps && v <= a.hi + eps);
+  const sx = span(x.lo, x.hi);
+  const sz = span(z.lo, z.hi);
+  const sy = (v: number) => ((v - y.lo) / (y.hi - y.lo || 1)) * h;
+  const tick = 0.12;
+  const c = colors.border;
   return (
     <group>
-      <gridHelper args={[SIZE, 8, colors.border, colors.border]} position={[0, 0, 0]} />
-      <Label at={[0, -0.25, h + 0.35]}>{x.name}</Label>
-      <Label at={[-h, -0.25, h + 0.35]} muted>{f(x.lo)}</Label>
-      <Label at={[h, -0.25, h + 0.35]} muted>{f(x.hi)}</Label>
-      <Label at={[h + 0.45, -0.25, 0]}>{z.name}</Label>
-      <Label at={[h + 0.45, -0.25, -h]} muted>{f(z.lo)}</Label>
-      <Label at={[h + 0.45, -0.25, h]} muted>{f(z.hi)}</Label>
-      <Label at={[-h - 0.35, SIZE / 2, -h]}>{y.name}</Label>
-      <Label at={[-h - 0.35, 0.05, -h]} muted>{f(y.lo)}</Label>
-      <Label at={[-h - 0.35, SIZE / 2 - 0.3, -h]} muted>{f(y.hi)}</Label>
+      <gridHelper args={[SIZE, 8, c, c]} position={[0, 0, 0]} />
+      <Line points={[[-h, 0, h], [h, 0, h]]} color={c} lineWidth={1.5} />
+      <Line points={[[h, 0, -h], [h, 0, h]]} color={c} lineWidth={1.5} />
+      <Line points={[[-h, 0, -h], [-h, h, -h]]} color={c} lineWidth={1.5} />
+      {inside(x, 4).map((v) => (
+        <group key={`x${v}`}>
+          <Line points={[[sx(v), 0, h], [sx(v), 0, h + tick]]} color={c} lineWidth={1} />
+          <Label at={[sx(v), 0, h + 0.42]} muted>{fmt(v)}</Label>
+        </group>
+      ))}
+      <Label at={[0, 0, h + 0.95]}>{x.name}</Label>
+      {inside(z, 4).map((v) => (
+        <group key={`z${v}`}>
+          <Line points={[[h, 0, sz(v)], [h + tick, 0, sz(v)]]} color={c} lineWidth={1} />
+          <Label at={[h + 0.5, 0, sz(v)]} muted>{fmt(v)}</Label>
+        </group>
+      ))}
+      <Label at={[h + 1.05, 0, 0]}>{z.name}</Label>
+      {inside(y, 3).map((v) => (
+        <group key={`y${v}`}>
+          <Line points={[[-h, sy(v), -h], [-h - tick, sy(v), -h]]} color={c} lineWidth={1} />
+          <Label at={[-h - 0.45, sy(v), -h]} muted>{fmt(v)}</Label>
+        </group>
+      ))}
+      <Label at={[-h - 0.45, h + 0.3, -h]}>{y.name}</Label>
     </group>
   );
 }

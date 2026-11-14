@@ -1,5 +1,5 @@
 import { useAppState, useDispatch } from "../state/store";
-import { fmt, fmtFull, shapeStr } from "../format";
+import { fmt, fmt6, fmtFull, shapeStr } from "../format";
 import { unflatIndex } from "../trace/load";
 
 export function Inspector() {
@@ -71,8 +71,8 @@ export function Inspector() {
             {sel && (
               <>
                 <dt>selected</dt>
-                <dd className="mono">
-                  {trace.label(tensor.id)}[{sel.join(", ")}] = {fmtFull(trace.value(tensor.id, sel))}
+                <dd className="mono" title={`${trace.label(tensor.id)}[${sel.join(", ")}] = ${fmtFull(trace.value(tensor.id, sel))}`}>
+                  {trace.label(tensor.id)}[{sel.join(", ")}] = {fmt6(trace.value(tensor.id, sel))}
                 </dd>
               </>
             )}
@@ -90,7 +90,7 @@ export function Inspector() {
                     title={`${trace.label(tensor.id)}[${idx.join(", ")}] = ${fmtFull(v)}`}
                     onClick={() => dispatch({ type: "select", selection: { tensorId: tensor.id, index: idx } })}
                   >
-                    <span className="nvz-idx">[{idx.join(", ")}]</span> {fmt(v)}
+                    <span className="nvz-idx">[{idx.join(", ")}]</span> {fmt6(v)}
                   </li>
                 );
               })}

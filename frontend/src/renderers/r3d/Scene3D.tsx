@@ -8,7 +8,9 @@ import { availableScenes, sceneCaption, type SceneId } from "./scenes";
 
 /** Half-extents (scene units) that must stay in frame: the SIZE cube's diagonal plus label room. */
 const FRAME_HALF_W = 3.3;
-const FRAME_HALF_H = 2.7;
+const FRAME_HALF_H = 3.0;
+/** Scenes sit on a floor at y = -SIZE/4, so the camera looks a little below the origin. */
+const LOOK_AT_Y = -0.6;
 
 /**
  * Puts the camera on the `direction` ray, looking at the origin, at the distance that fits
@@ -25,9 +27,11 @@ function CameraRig({ direction }: { direction: [number, number, number] }) {
   useEffect(() => {
     const n = Math.hypot(...direction) || 1;
     camera.position.set((direction[0] / n) * distance, (direction[1] / n) * distance, (direction[2] / n) * distance);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(0, LOOK_AT_Y, 0);
     camera.updateProjectionMatrix();
-    (controls as OrbitControlsImpl | null)?.saveState?.();
+    const c = controls as OrbitControlsImpl | null;
+    c?.target.set(0, LOOK_AT_Y, 0);
+    c?.saveState?.();
   }, [camera, controls, key]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
@@ -57,7 +61,7 @@ export function Scene3D() {
   const [dark, setDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const on = () => setDark(mq.matches);
+    const on = () => requestAnimationFrame(() => setDark(mq.matches)); // after the new CSS variables apply
     mq.addEventListener("change", on);
     return () => mq.removeEventListener("change", on);
   }, []);
