@@ -12,7 +12,10 @@ Plain NumPy, run offline. Writes to ``src/nvzlab/weights/``:
 - ``cnn.npz``: ``W_conv``, ``b_conv``, ``W_out``, ``b_out`` (full-batch gradient descent on
   ``shapes`` through the model's own forward function and a ``Tape``) and ``initial_*``;
 - ``transformer.npz``: the mini Transformer's 16 parameter arrays (gradient descent on
-  ``tokens`` the same way) and ``initial_*``.
+  ``tokens`` the same way) and ``initial_*``. The learning rate is deliberately small
+  (0.1 instead of 0.5): the task is solved either way, but the larger rate drives the
+  attention scores to about +-60 and every softmax row to a single 1, which makes a
+  blank heat map. At 0.1 the scores stay within about +-7 and the rows spread.
 
 Run from the repo root: ``python scripts/make_weights.py``.
 """
@@ -164,7 +167,7 @@ def main() -> None:
 
     ds = datasets.load("tokens")
     p0 = transformer_initial()
-    p = fit_with_tape(transformer.forward, p0, ds.X, ds.y, lr=0.5, epochs=1500)
+    p = fit_with_tape(transformer.forward, p0, ds.X, ds.y, lr=0.1, epochs=1500)
     np.savez(OUT / "transformer.npz", **p, **{"initial_" + k: v for k, v in p0.items()})
     print(f"transformer: train accuracy={accuracy(transformer.forward, p, ds.X, ds.y):.3f}")
 
