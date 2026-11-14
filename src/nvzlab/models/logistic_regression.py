@@ -13,7 +13,7 @@ from nvzlab.models.base import Model
 from nvzlab.ops.losses import EPS
 
 LOSS_GRID = 41
-MIN_HALF_WIDTH = 0.25
+MIN_HALF_WIDTH = 0.15
 
 
 class LogisticRegression(Model):
@@ -81,7 +81,7 @@ class LogisticRegression(Model):
     ) -> None:
         """Loss landscape: mean BCE on a grid around the training path (two parameters vary,
         the rest stay at their initial values). The window is centred on the path with a
-        half-width of max(3 × path extent, 0.25) per axis."""
+        half-width of max(1.5 × path extent, 0.15) per axis, so the path spans the window."""
         p0 = path[0]
         if self.features == 2:
             names = ("w1", "w2")
@@ -92,7 +92,7 @@ class LogisticRegression(Model):
             coords = np.array([[float(p["w"][0]), float(p["b"][0])] for p in path])
             fixed = "nothing else is held fixed (w and b are the only parameters)"
         lo, hi = coords.min(axis=0), coords.max(axis=0)
-        centre, half = (lo + hi) / 2, np.maximum(3.0 * (hi - lo), MIN_HALF_WIDTH)
+        centre, half = (lo + hi) / 2, np.maximum(1.5 * (hi - lo), MIN_HALF_WIDTH)
         grid = [np.linspace(c - h, c + h, LOSS_GRID) for c, h in zip(centre, half, strict=True)]
         a0, a1 = np.meshgrid(grid[0], grid[1], indexing="ij")
         if self.features == 2:
@@ -112,7 +112,7 @@ class LogisticRegression(Model):
             loss,
             f"Mean binary cross-entropy over the {n} sample(s) of this trace on a "
             f"{LOSS_GRID}×{LOSS_GRID} grid of ({names[0]}, {names[1]}) with {fixed}. Window "
-            f"centred on the training path, half-width max(3 × path extent, {MIN_HALF_WIDTH}): "
+            f"centred on the training path, half-width max(1.5 × path extent, {MIN_HALF_WIDTH}): "
             f"{window}. Real computed values; path and marker heights are the exact losses "
             f"in loss_path, not grid interpolations.",
         )

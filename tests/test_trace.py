@@ -257,10 +257,10 @@ def test_loss_path_is_exact_and_window_follows_the_path(samples):
     recorded = [float(t.array) for t in tr.tensors.values() if t.role == "loss"]
     np.testing.assert_allclose(ctx["loss_path"][:3], recorded, rtol=1e-6)
     assert all(a > b for a, b in zip(direct, direct[1:], strict=False)), direct  # downhill
-    # Window: centred on the path, half-width max(3 × extent, 0.25) per axis.
+    # Window: centred on the path, half-width max(1.5 × extent, 0.15) per axis.
     coords = np.array([[w[0], w[1]] for w, _ in path])
     lo, hi = coords.min(axis=0), coords.max(axis=0)
-    half = np.maximum(3 * (hi - lo), 0.25)
+    half = np.maximum(1.5 * (hi - lo), 0.15)
     for k, name in enumerate(("w1", "w2")):
         g = ctx[f"loss_landscape_{name}"]
         assert g[0] == pytest.approx((lo[k] + hi[k]) / 2 - half[k])
