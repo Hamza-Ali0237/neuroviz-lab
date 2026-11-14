@@ -63,6 +63,7 @@ class CNN(Model):
     """3x8x8 image -> conv 3->4 (3x3) -> ReLU -> max pool -> 64 -> 3 classes, on ``shapes``."""
 
     name = "cnn"
+    display_name = "CNN"
     family = "cnn"
     description = (
         "3x8x8 image -> conv 3->4 (3x3, pad 1) -> ReLU -> max pool 2x2 -> flatten (64) -> "

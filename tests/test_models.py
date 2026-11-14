@@ -145,3 +145,17 @@ def test_predict_default_is_single_sample_two_features():
     pred = next(e for e in tr.events if e.kind == "prediction")
     out = next(t for t in tr.tensors.values() if t.role == "output")
     assert pred.payload["predicted_class"] == (out.array > 0.5).astype(int).tolist()
+
+
+def test_builtin_display_names_title_the_trace_and_run_id_keeps_the_name():
+    expected = {
+        "logistic_regression": "Logistic Regression",
+        "mlp": "MLP",
+        "decision_tree": "Decision Tree",
+        "cnn": "CNN",
+        "transformer": "Transformer",
+    }
+    for name, display in expected.items():
+        tr = nvz.trace(name)
+        assert tr.model["name"] == display and tr.run_id.startswith(name + "-predict-")
+    assert nvz.trace("mlp", name="My net").model["name"] == "My net"

@@ -20,6 +20,7 @@ class LogisticRegression(Model):
     """Binary classifier: ``p = sigmoid(x @ w + b)``, trained on ``blobs``."""
 
     name = "logistic_regression"
+    display_name = "Logistic Regression"
     family = "linear"
     supports = {"samples": ("single", "batch"), "features": (1, 2)}
     loss = "bce"

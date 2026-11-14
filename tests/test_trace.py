@@ -46,7 +46,9 @@ def test_schema_valid_for_builtin(case):
     model = case.pop("model")
     tr = nvz.trace(model, **case)
     validate(tr)
-    assert tr.kind == case["kind"] and tr.model["name"] == model
+    assert tr.kind == case["kind"]
+    assert tr.model["name"] == nvz.models.load(model).display_name
+    assert tr.run_id.startswith(f"{model}-{case['kind']}-")
     if "samples" in case:
         assert tr.mode["samples"] == case["samples"]
     else:  # a self-trained model learns from the whole dataset

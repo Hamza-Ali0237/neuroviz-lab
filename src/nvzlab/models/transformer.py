@@ -141,6 +141,7 @@ class Transformer(Model):
     """One encoder block (single-head attention, feed-forward, residuals) on ``tokens``."""
 
     name = "transformer"
+    display_name = "Transformer"
     family = "transformer"
     description = (
         "6 tokens -> embeddings (d=8) -> 1 encoder block (1-head self-attention, feed-forward "

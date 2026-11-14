@@ -274,6 +274,7 @@ class DecisionTree(Model):
     """Classification tree (depth 3) on ``blobs`` or ``moons``; Gini or entropy splits."""
 
     name = "decision_tree"
+    display_name = "Decision Tree"
     family = "tree"
     description = "classification tree, depth 3, midpoint thresholds; Gini or entropy"
     supports = {
