@@ -131,6 +131,7 @@ def test_layers_backward_order_and_context_examples():
         ("Update W_conv, b_conv, W_out and b_out", None, "update"),
     ]
     ctx = {t.name: t for t in tr.tensors.values() if t.role == "context"}
+    assert ctx.pop("loss_path").shape == (2,)  # every train trace records the exact losses
     assert sorted(ctx) == ["example_cross", "example_ring", "example_square"]
     assert all(t.shape == (3, 8, 8) and "orientation" in t.note for t in ctx.values())
     assert [a["op"] for a in tr.model["architecture"]] == [
