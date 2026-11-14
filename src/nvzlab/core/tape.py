@@ -20,6 +20,8 @@ if TYPE_CHECKING:
     from nvzlab.core.op import Op
 
 _current: contextvars.ContextVar[Tape | None] = contextvars.ContextVar("nvzlab_tape", default=None)
+#: Update steps name every parameter up to this many; beyond it the title gives the count.
+MAX_NAMED_UPDATES = 4
 
 
 def current_tape() -> Tape | None:
@@ -355,19 +357,23 @@ class Tape:
         """Record ``after = before - lr * grad`` per param with a gradient; return new params."""
         self.phase = "update"
         names = list(params)
-        title = "Update " + (
-            ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]
-        )
+        if len(names) > MAX_NAMED_UPDATES:
+            title = f"Update all parameters ({len(names)} arrays)"
+        else:
+            title = "Update " + (
+                ", ".join(names[:-1]) + " and " + names[-1] if len(names) > 1 else names[0]
+            )
         new: dict[str, np.ndarray] = {}
         with self.step(title):
-            for name, before in params.items():
+            for i, (name, before) in enumerate(params.items()):
+                extra = {"params": names} if i == 0 else {}  # the full list, once per step
                 before_id = self.tensor_id(before)
                 g = grads.get(before_id) if before_id else None
                 if g is None:
                     new[name] = before
                     self.event(
                         "sgd_skipped",
-                        {"param": name, "reason": "no gradient reached it"},
+                        {"param": name, "reason": "no gradient reached it", **extra},
                         refs=[before],
                     )
                     continue
@@ -381,6 +387,7 @@ class Tape:
                         "before": before_id,
                         "grad": self.tensor_id(g),
                         "after": after_id,
+                        **extra,
                     },
                     refs=[before_id, self.tensor_id(g), after_id],
                 )

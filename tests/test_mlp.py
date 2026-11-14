@@ -196,3 +196,22 @@ def test_prob_grid_matches_trace_predictions_at_three_points():
         assert "moons data range plus 0.5" in next(
             t.note for t in tr.tensors.values() if t.name == "prob_grid_0"
         )
+
+
+def test_default_sample_rule_first_correct_rows_with_two_active_hidden_units():
+    m = nvz.models.load("mlp")
+    ds = m.dataset
+    h = np.maximum(ds.X @ m.params["W1"] + m.params["b1"], 0.0)
+    ok = ((h @ m.params["W2"] + m.params["b2"]).argmax(axis=1) == ds.y) & ((h > 0).sum(axis=1) >= 2)
+    for n in (1, 4):
+        x, y = m.default_sample(n)
+        np.testing.assert_array_equal(x, ds.X[np.flatnonzero(ok)[:n]])
+        np.testing.assert_array_equal(y, ds.y[np.flatnonzero(ok)[:n]])
+    tr = nvz.trace("mlp", samples="batch")
+    hidden = next(tr.tensors[n.outputs[0]].array for n in tr.nodes if n.op == "relu")
+    assert hidden.shape == (4, 4) and ((hidden > 0).sum(axis=1) >= 2).all()
+    pred = next(e for e in tr.events if e.kind == "prediction").payload["predicted_class"]
+    assert pred == next(t.array for t in tr.tensors.values() if t.name == "y").astype(int).tolist()
+    np.testing.assert_array_equal(
+        tr.tensors["t0"].array, nvz.trace("mlp", samples="batch").tensors["t0"].array
+    )

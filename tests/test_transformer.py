@@ -172,3 +172,21 @@ def test_loss_decreases_over_iterations():
     tr = nvz.trace("transformer", kind="train", samples="batch", iterations=2)
     losses = [float(t.array) for t in tr.tensors.values() if t.role == "loss"]
     assert len(losses) == 2 and losses[1] < losses[0]
+
+
+def test_pretrained_attention_is_soft_enough_to_read_as_a_heat_map():
+    tr = nvz.trace("transformer")
+    a = next(t.array for t in tr.tensors.values() if t.name == "attention weights")[0]
+    scaled = next(tr.tensors[n.outputs[0]].array for n in tr.nodes if n.op == "scale")[0]
+    assert a.max(axis=1).max() < 0.8 and a.max(axis=1).min() > 1 / 6
+    assert (np.sort(a, axis=1)[:, -2] > 0.1).all()  # every row has a visible second choice
+    assert -10 < scaled.min() and scaled.max() < 10
+
+
+def test_update_step_with_many_params_has_a_short_title_and_the_full_list():
+    tr = nvz.trace("transformer", kind="train")
+    up = [s for s in tr.steps if s.phase == "update"]
+    assert [s.title for s in up] == ["Update all parameters (16 arrays)"]
+    events = [e for e in tr.events if e.id in up[0].events]
+    assert events[0].payload["params"] == list(PARAM_NAMES)
+    assert all("params" not in e.payload for e in events[1:])
