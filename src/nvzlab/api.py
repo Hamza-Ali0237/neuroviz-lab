@@ -45,7 +45,8 @@ def trace(
     model's dataset. ``kind="train"`` records forward, loss, backward and one SGD update per
     iteration (at most 3); ``lr`` defaults to the model's ``default_lr`` (0.1 for functions).
     User ``params`` are never modified. ``name`` overrides the display name (default: the
-    built-in name, the function's ``__name__`` or the class name).
+    built-in's ``display_name`` such as "Logistic Regression", the function's ``__name__``
+    or the class name); the ``run_id`` always uses the built-in name.
 
     Examples
     --------
@@ -64,6 +65,7 @@ def trace(
         )
 
     provenance = "user"
+    run_id_name = name
     if isinstance(model, str):
         if features is not None:
             model_options["features"] = features
@@ -81,7 +83,9 @@ def trace(
         if samples is not None:
             model.check_option("samples", samples)
         forward, family = model.forward, model.family
-        name = name or (model.name if model.name != Model.name else type(model).__name__)
+        if name is None:
+            name = model.name if model.name != Model.name else type(model).__name__
+            run_id_name, name = name, model.display_name or name
         self_trained = kind == "train" and model.trains_itself
         if params is None:
             params = (
@@ -104,12 +108,13 @@ def trace(
                     )
                 x, y_default = dataset.X, dataset.y
             else:
-                x, y_default = dataset.sample(_BATCH if samples == "batch" else 1)
+                x, y_default = model.default_sample(_BATCH if samples == "batch" else 1)
             y = y_default if y is None else y
         dataset_info = dataset.to_dict() if dataset is not None else None
     elif callable(model):
         forward, family = model, "custom"
         name = name or getattr(model, "__name__", type(model).__name__)
+        run_id_name = run_id_name or name
         dataset_info = None
     else:
         raise NvzError(
@@ -228,6 +233,7 @@ def trace(
     return tape.to_trace(
         kind=kind,
         model={"name": name, "family": family, "provenance": provenance},
+        run_id=f"{run_id_name}-{kind}-{mode['samples']}-f{mode['n_features']}",
         dataset=dataset_info,
         mode=mode,
         meta={

@@ -31,6 +31,8 @@ class Model:
     """
 
     name: str = "model"
+    #: Human title shown by the viewer; ``None`` falls back to ``name``.
+    display_name: str | None = None
     family: str = "custom"
     description: str = ""
     supports: dict[str, tuple[Any, ...]] = {"samples": ("single", "batch")}
@@ -61,6 +63,16 @@ class Model:
         sets (initial first, then after each update) and the exact loss at each, to record
         ``nvz.context`` tensors that depend on the path (e.g. a loss landscape window).
         Default: nothing."""
+
+    def default_sample(self, n: int) -> tuple[np.ndarray, np.ndarray]:
+        """The ``n`` dataset rows a trace uses when the caller passes no ``x``.
+
+        Default: ``dataset.sample(n)`` (a fixed random pick). Models override it when a
+        stated rule gives a more instructive sample.
+        """
+        if self.dataset is None:
+            raise NvzError(f"{self.name}: x is required because the model has no dataset.")
+        return self.dataset.sample(n)
 
     def __call__(self, x: np.ndarray, params: dict[str, np.ndarray] | None = None) -> np.ndarray:
         return self.forward(x, self.params if params is None else params)

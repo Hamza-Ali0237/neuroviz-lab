@@ -13,12 +13,21 @@ from nvzlab.models.base import Model
 
 PROB_GRID = 41
 GRID_MARGIN = 0.5
+MIN_ACTIVE_HIDDEN = 2
 
 
 class MLP(Model):
-    """2 inputs -> 4 hidden (ReLU) -> 2 logits -> softmax, trained on ``moons``."""
+    """2 inputs -> 4 hidden (ReLU) -> 2 logits -> softmax, trained on ``moons``.
+
+    Default sample rule (``x`` not given): the first row of ``moons`` in dataset order that
+    the pretrained weights classify correctly and that activates at least
+    ``MIN_ACTIVE_HIDDEN`` (2) of the 4 hidden ReLU units; ``samples="batch"`` takes the
+    first 4 such rows. A random pick can land on a row where every hidden unit is 0, and
+    then the network diagram shows nothing happening.
+    """
 
     name = "mlp"
+    display_name = "MLP"
     family = "mlp"
     description = "2 inputs -> 4 hidden (ReLU) -> 2 classes (softmax); cross-entropy on moons"
     supports = {"samples": ("single", "batch"), "features": (2,)}
@@ -66,6 +75,20 @@ class MLP(Model):
                 refs=[prob],
             )
         return prob
+
+    def default_sample(self, n: int) -> tuple[np.ndarray, np.ndarray]:
+        """The first ``n`` rows (dataset order) that are classified correctly by the
+        pretrained weights and activate at least ``MIN_ACTIVE_HIDDEN`` hidden units."""
+        ds, p = self.dataset, self.params
+        h = np.maximum(ds.X @ p["W1"] + p["b1"], 0.0)
+        correct = (h @ p["W2"] + p["b2"]).argmax(axis=1) == ds.y
+        idx = np.flatnonzero(correct & ((h > 0).sum(axis=1) >= MIN_ACTIVE_HIDDEN))[:n]
+        if len(idx) < n:
+            raise NvzError(f"mlp: only {len(idx)} rows satisfy the default-sample rule, need {n}.")
+        x, y = ds.X[idx].copy(), ds.y[idx].copy()
+        x.setflags(write=False)
+        y.setflags(write=False)
+        return x, y
 
     # --- context -------------------------------------------------------------------
     def grid_axes(self) -> tuple[np.ndarray, np.ndarray]:
