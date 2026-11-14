@@ -156,12 +156,28 @@ function EventView({ e }: { e: EventRecord }) {
   return <GenericEvent e={e} />;
 }
 
+/** The model-specific plot for this trace, or null when there is none (generic traces). */
+function ModelScene() {
+  const { trace } = useAppState();
+  if (trace.raw.model.family === "linear" && [1, 2].includes(trace.raw.mode.n_features)) return <LRScene />;
+  return null;
+}
+
 export function Scene2D() {
-  const { trace, stepIndex } = useAppState();
+  const { trace, stepIndex, capture } = useAppState();
   const step = trace.steps[stepIndex];
   const nodes = trace.nodesInStep(stepIndex);
   const events = trace.eventsInStep(stepIndex);
   const hasScene = trace.raw.model.family === "linear" && [1, 2].includes(trace.raw.mode.n_features);
+  if (capture) {
+    // Capture mode: the scene alone, large; the flow of ops only when the model has no scene.
+    return (
+      <div className="nvz-scene2d nvz-capture-2d">
+        {hasScene ? <ModelScene /> : nodes.map((n) => <NodeView key={n.id} node={n} />)}
+        {!hasScene && events.map((e) => <EventView key={e.id} e={e} />)}
+      </div>
+    );
+  }
   // Forward steps: the model's plot comes first so it is visible without scrolling.
   const plotFirst = hasScene && step.phase === "forward";
   return (
@@ -172,7 +188,7 @@ export function Scene2D() {
           <h2>{step.title}</h2>
           {trace.raw.kind === "train" && <span className="nvz-muted">iteration {step.iteration + 1}</span>}
         </header>
-        {plotFirst && <LRScene />}
+        {plotFirst && <ModelScene />}
         {nodes.map((n) => (
           <NodeView key={n.id} node={n} />
         ))}
@@ -183,7 +199,7 @@ export function Scene2D() {
       </div>
       {hasScene && !plotFirst && (
         <div className="nvz-side">
-          <LRScene />
+          <ModelScene />
         </div>
       )}
     </div>

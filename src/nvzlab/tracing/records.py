@@ -138,23 +138,40 @@ class Trace:
         """Deterministic JSON string: same trace, same bytes."""
         return serializer.to_json(self.to_dict())
 
-    def save(self, path: str | Path) -> Path:
+    def save(
+        self,
+        path: str | Path,
+        dim: str = "2d",
+        capture: str | None = None,
+        capture_step_seconds: float = 2.0,
+    ) -> Path:
         """Write the trace; ``.json`` for the raw trace, ``.html`` for a self-contained viewer.
+
+        For ``.html``, ``dim`` picks the renderer the page opens with and
+        ``capture="square"`` or ``"vertical"`` writes a capture-mode page (no controls,
+        large type, auto-play and loop; one step every ``capture_step_seconds``).
 
         Examples
         --------
         >>> tr = nvz.trace("logistic_regression")  # doctest: +SKIP
         >>> tr.save("run.json")  # doctest: +SKIP
         >>> tr.save("run.html")  # doctest: +SKIP
+        >>> tr.save("clip.html", dim="3d", capture="square")  # doctest: +SKIP
         """
         path = Path(path)
         if path.suffix == ".json":
+            if capture is not None:
+                raise ValueError(
+                    "Trace.save: capture mode applies to '.html' pages only. "
+                    "Fix: save as '.html', or drop `capture` for a raw '.json' trace."
+                )
             path.write_text(self.to_json(), encoding="utf-8")
             return path
         if path.suffix == ".html":
             from nvzlab import viewer
 
-            path.write_text(viewer.to_html(self), encoding="utf-8")
+            html = viewer.to_html(self, dim, capture, capture_step_seconds)
+            path.write_text(html, encoding="utf-8")
             return path
         raise ValueError(
             f"Trace.save: unsupported extension {path.suffix!r} for {str(path)!r}. "
@@ -206,18 +223,24 @@ class Trace:
         """
         return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
-    def show(self, dim: str = "2d") -> Path | None:
+    def show(
+        self, dim: str = "2d", capture: str | None = None, capture_step_seconds: float = 2.0
+    ) -> Path | None:
         """Open the interactive viewer: inline in Jupyter, otherwise in the browser.
 
-        Returns the path of the written HTML file outside a notebook.
+        Returns the path of the written HTML file outside a notebook. ``capture`` opens
+        capture mode (``"square"`` or ``"vertical"``, see :meth:`save`).
 
         Examples
         --------
         >>> nvz.trace("logistic_regression").show()  # doctest: +SKIP
+        >>> nvz.trace("mlp").show(capture="square")  # doctest: +SKIP
         """
         from nvzlab import viewer
 
-        return viewer.show(self, dim=dim)
+        return viewer.show(
+            self, dim=dim, capture=capture, capture_step_seconds=capture_step_seconds
+        )
 
     # --- inspection -----------------------------------------------------------------
     def summary(self) -> str:

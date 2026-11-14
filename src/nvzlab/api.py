@@ -215,16 +215,23 @@ def show(model: Any, x: Any = None, y: Any = None, **options: Any) -> Trace:
     """Trace ``model`` and open the interactive viewer; same signature as :func:`trace`.
 
     Inline in Jupyter, otherwise in the default browser. Returns the trace so you can keep
-    working with it (``tr.save("run.html")``).
+    working with it (``tr.save("run.html")``). ``capture="square"`` or ``"vertical"`` opens
+    capture mode for screen recording (``capture_step_seconds`` per step, default 2).
 
     Examples
     --------
     >>> import nvzlab as nvz
     >>> tr = nvz.show("logistic_regression")  # doctest: +SKIP
     >>> tr = nvz.show("logistic_regression", samples="batch", kind="train")  # doctest: +SKIP
+    >>> tr = nvz.show("mlp", dim="3d", capture="vertical")  # doctest: +SKIP
     """
+    from nvzlab import viewer
+
+    capture = options.pop("capture", None)
+    seconds = options.pop("capture_step_seconds", 2.0)
+    viewer.check_capture(capture, seconds)
     tr = trace(model, x, y, **options)
-    tr.show(dim=options.get("dim", "2d"))
+    tr.show(dim=options.get("dim", "2d"), capture=capture, capture_step_seconds=seconds)
     return tr
 
 

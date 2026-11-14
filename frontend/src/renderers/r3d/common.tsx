@@ -36,6 +36,13 @@ export function cellColor(v: number, absMax: number, panel: THREE.Color): THREE.
   return new THREE.Color(r / 255, g / 255, b / 255).lerp(panel, 1 - a);
 }
 
+/** Camera position at `elevation`/`azimuth` degrees and `distance` from the origin. */
+export function orbitPosition(elevation: number, azimuth: number, distance: number): [number, number, number] {
+  const el = (elevation * Math.PI) / 180;
+  const az = (azimuth * Math.PI) / 180;
+  return [distance * Math.cos(el) * Math.sin(az), distance * Math.sin(el), distance * Math.cos(el) * Math.cos(az)];
+}
+
 /** Map a value in [lo, hi] onto [-SIZE/2, SIZE/2]. */
 export function span(lo: number, hi: number) {
   return (v: number) => ((v - lo) / (hi - lo || 1) - 0.5) * SIZE;

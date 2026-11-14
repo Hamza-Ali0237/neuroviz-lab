@@ -4,15 +4,20 @@ import { Line } from "@react-three/drei";
 import { useAppState, useDispatch } from "../../state/store";
 import { fmt } from "../../format";
 import { unflatIndex } from "../../trace/load";
-import { Axes, Label, SIZE, Surface, bilinear, cellColor, span, useTheme } from "./common";
+import { Axes, Label, SIZE, Surface, bilinear, cellColor, orbitPosition, span, useTheme } from "./common";
 
 export type SceneId = "probability" | "loss" | "tensors";
 
 export interface SceneDef {
   id: SceneId;
   title: string;
+  /** Static default camera direction (the distance is fitted to the canvas); orbit controls reset to it. */
+  camera: [number, number, number];
   render: () => JSX.Element;
 }
+
+/** 35° elevation, 45° azimuth: both floor axes read left-to-right and the surface is not hidden by itself. */
+export const DEFAULT_CAMERA = orbitPosition(35, 45, 1);
 
 const GRID = 41;
 
@@ -254,15 +259,15 @@ export function availableScenes(trace: ReturnType<typeof useAppState>["trace"], 
   const nf = trace.raw.mode.n_features;
   const hasLoss = !!trace.context("loss_landscape");
   const phase = trace.steps[stepIndex]?.phase;
-  const loss: SceneDef = { id: "loss", title: "Loss landscape", render: () => <LossLandscape /> };
-  const prob: SceneDef = { id: "probability", title: "Probability surface", render: () => <ProbabilitySurface /> };
+  const loss: SceneDef = { id: "loss", title: "Loss landscape", camera: DEFAULT_CAMERA, render: () => <LossLandscape /> };
+  const prob: SceneDef = { id: "probability", title: "Probability surface", camera: DEFAULT_CAMERA, render: () => <ProbabilitySurface /> };
   if (linear && nf === 2 && trace.byRole("input", "x")?.values) {
     if (hasLoss && phase !== "forward") out.push(loss, prob);
     else out.push(prob, ...(hasLoss ? [loss] : []));
   } else if (linear && nf === 1 && hasLoss) {
     out.push(loss);
   }
-  out.push({ id: "tensors", title: "Tensor stack", render: () => <TensorStack /> });
+  out.push({ id: "tensors", title: "Tensor stack", camera: DEFAULT_CAMERA, render: () => <TensorStack /> });
   return out;
 }
 

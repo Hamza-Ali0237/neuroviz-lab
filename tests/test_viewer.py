@@ -1,5 +1,7 @@
 import re
 
+import pytest
+
 import nvzlab as nvz
 from nvzlab import viewer
 from nvzlab.cli import main
@@ -55,3 +57,30 @@ def test_cli_open_and_demo_html(tmp_path, monkeypatch):
     monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
     assert main(["open", str(json_path)]) == 0
     assert len(opened) == 1
+
+
+def test_capture_pages_set_the_flag(tmp_path, monkeypatch):
+    tr = nvz.trace("logistic_regression")
+    html = tr.save(tmp_path / "sq.html", capture="square").read_text(encoding="utf-8")
+    assert html.startswith("<!doctype html>")
+    assert 'data-capture="square"' in html and 'data-capture-seconds="2.0"' in html
+    html = viewer.to_html(tr, dim="3d", capture="vertical", capture_step_seconds=1.5)
+    assert 'data-dim="3d" data-capture="vertical" data-capture-seconds="1.5"' in html
+    assert 'data-capture=""' in viewer.to_html(tr)  # normal pages carry an empty flag
+    monkeypatch.setattr("webbrowser.open", lambda url: True)
+    path = nvz.show("logistic_regression", capture="square", capture_step_seconds=1)
+    assert path.kind == "predict"  # nvz.show still returns the trace
+    path = tr.show(capture="vertical")
+    assert 'data-capture="vertical"' in path.read_text(encoding="utf-8")
+
+
+def test_capture_errors_are_explicit(tmp_path):
+    tr = nvz.trace("logistic_regression")
+    with pytest.raises(ValueError, match="square.*vertical.*received 'wide'"):
+        tr.save(tmp_path / "x.html", capture="wide")
+    with pytest.raises(ValueError, match="capture_step_seconds"):
+        tr.save(tmp_path / "x.html", capture="square", capture_step_seconds=0)
+    with pytest.raises(ValueError, match="'.html' pages only"):
+        tr.save(tmp_path / "x.json", capture="square")
+    with pytest.raises(ValueError, match="received 'tall'"):
+        nvz.show("logistic_regression", capture="tall")

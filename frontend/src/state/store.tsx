@@ -7,6 +7,9 @@ export interface Selection {
   index: number[] | null;
 }
 
+/** Capture mode: a fixed 1080×1080 or 1080×1920 stage with no controls, for screen recording. */
+export type Capture = "square" | "vertical" | null;
+
 export interface AppState {
   trace: TraceView;
   stepIndex: number;
@@ -16,6 +19,9 @@ export interface AppState {
   selection: Selection;
   sampleIndex: number;
   dimension: "2d" | "3d";
+  capture: Capture;
+  /** Preferred 3D scene id from the page flags (e.g. "loss"), or null for the default. */
+  scene: string | null;
 }
 
 export type Action =
@@ -67,7 +73,13 @@ export function reducer(s: AppState, a: Action): AppState {
 const StateCtx = createContext<AppState | null>(null);
 const DispatchCtx = createContext<Dispatch<Action> | null>(null);
 
-export function StoreProvider({ trace, dim = "2d", children }: { trace: TraceView; dim?: "2d" | "3d"; children: ReactNode }) {
+export function StoreProvider({ trace, dim = "2d", capture = null, scene = null, children }: {
+  trace: TraceView;
+  dim?: "2d" | "3d";
+  capture?: Capture;
+  scene?: string | null;
+  children: ReactNode;
+}) {
   const [state, dispatch] = useReducer(reducer, {
     trace,
     stepIndex: 0,
@@ -76,6 +88,8 @@ export function StoreProvider({ trace, dim = "2d", children }: { trace: TraceVie
     selection: EMPTY,
     sampleIndex: 0,
     dimension: dim,
+    capture,
+    scene,
   });
 
   // Playback timer: one step per second at 1×.
