@@ -19,6 +19,10 @@
 - `shapes` dataset: 90 synthetic 8x8 RGB images (square, ring, cross) at random positions and colours.
 - Built-in `cnn` (conv 3->4 3x3 -> ReLU -> max pool 2x2 -> flatten -> linear 64->3 -> softmax, cross-entropy on `shapes`) with layer-labelled steps, one context example image per class, pretrained and initial weights, parity with PyTorch.
 - Ops can attach extra data to their recorded node through `Op.node_attrs(ctx)`.
+- Ops `embedding`, `layernorm`, `transpose` and `scale`; `matmul` accepts batched (3-D) operands and `linear` any leading dimensions, with the old 2-D behaviour unchanged.
+- `tokens` dataset: 120 sequences of 6 ids over the vocabulary A..H, label 1 when the first token equals the last.
+- Built-in `transformer`: token and learned positional embeddings (d=8), one pre-norm encoder block with single-head self-attention written out as visible ops (Q, K, V, scores, scaling, softmax rows as the named tensor "attention weights", A·V, output projection), residual adds that show up as `grad_accumulate` nodes, feed-forward 8->16->8, mean over positions, 2-class softmax; pretrained and initial weights, parity with PyTorch.
+- `nvz.name(array, "label")` names an intermediate tensor in the trace.
 - `nvz.step(..., layer=...)`: an optional layer label on steps, copied onto the mirrored backward steps and stored in the trace (`steps[].layer`).
 - `nvz.list_models()` returns a one-line description and the supported options per model.
 - CLI: `nvzlab list`, `nvzlab demo <model>` (opens the viewer; `--json`/`--html` to write a file), `nvzlab open trace.json`.

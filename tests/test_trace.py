@@ -17,7 +17,10 @@ CASES += [
     dict(model="mlp", kind=k, samples=s) for k in ("predict", "train") for s in ("single", "batch")
 ]
 CASES += [
-    dict(model="cnn", kind=k, samples=s) for k in ("predict", "train") for s in ("single", "batch")
+    dict(model=m, kind=k, samples=s)
+    for m in ("cnn", "transformer")
+    for k in ("predict", "train")
+    for s in ("single", "batch")
 ]
 CASES += [
     dict(model="decision_tree", kind="predict", samples=s, dataset=d, features=f, criterion=c)
@@ -48,11 +51,12 @@ def test_schema_valid_for_builtin(case):
         assert tr.mode["samples"] == case["samples"]
     else:  # a self-trained model learns from the whole dataset
         assert tr.mode == {"samples": "batch", "n_samples": 120, "n_features": case["features"]}
-    assert tr.mode["n_features"] == {"cnn": 192}.get(model, case.get("features", 2))
+    n_features = {"cnn": 192, "transformer": 6}.get(model, case.get("features", 2))
+    assert tr.mode["n_features"] == n_features
     assert tr.model["provenance"] == (
         "builtin-pretrained" if case["kind"] == "predict" else "builtin-initial"
     )
-    default_ds = {"mlp": "moons", "cnn": "shapes"}.get(model, "blobs")
+    default_ds = {"mlp": "moons", "cnn": "shapes", "transformer": "tokens"}.get(model, "blobs")
     assert tr.dataset["name"] == case.get("dataset", default_ds)
     if model != "cnn":  # image datasets name their channels, not every pixel
         assert len(tr.dataset["features"]) == tr.mode["n_features"]
@@ -65,6 +69,7 @@ def test_schema_valid_for_builtin(case):
         dict(model="logistic_regression", kind="train", samples="batch", iterations=3),
         dict(model="mlp", kind="train", samples="batch", iterations=3),
         dict(model="cnn", kind="train", samples="batch", iterations=2),
+        dict(model="transformer", kind="train", samples="batch", iterations=2),
         dict(model="decision_tree", kind="train", dataset="moons", iterations=3),
         dict(model="decision_tree", kind="predict", samples="batch", criterion="entropy"),
     ],

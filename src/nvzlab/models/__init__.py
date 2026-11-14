@@ -14,5 +14,15 @@ from nvzlab.models.decision_tree import DecisionTree
 from nvzlab.models.logistic_regression import LogisticRegression
 from nvzlab.models.mlp import MLP
 from nvzlab.models.registry import list_models, load
+from nvzlab.models.transformer import Transformer
 
-__all__ = ["CNN", "MLP", "DecisionTree", "LogisticRegression", "Model", "list_models", "load"]
+__all__ = [
+    "CNN",
+    "MLP",
+    "DecisionTree",
+    "LogisticRegression",
+    "Model",
+    "Transformer",
+    "list_models",
+    "load",
+]

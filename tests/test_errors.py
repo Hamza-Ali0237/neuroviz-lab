@@ -21,7 +21,8 @@ def test_unknown_dataset_and_op():
         nvz.core.registry.get("sigmod")
     with pytest.raises(
         UnknownNameError,
-        match="Available models: 'cnn', 'decision_tree', 'logistic_regression', 'mlp'",
+        match="Available models: 'cnn', 'decision_tree', 'logistic_regression', 'mlp', "
+        "'transformer'",
     ):
         nvz.models.load("zzz")
 
@@ -33,7 +34,10 @@ def test_shape_mismatch_names_op_shapes_and_fix():
     assert msg.startswith(
         "linear: expected w with shape (3,) or (3, m) to match x (2, 3), received w (4, 1). Fix:"
     )
-    with pytest.raises(ShapeError, match=r"matmul: expected a.shape\[1\] == b.shape\[0\]"):
+    with pytest.raises(
+        ShapeError,
+        match=r"matmul: expected the last dimension of a to equal the second-to-last of b",
+    ):
         ops.matmul(np.ones((2, 3)), np.ones((2, 3)))
     with pytest.raises(
         ShapeError,

@@ -7,12 +7,12 @@ from nvzlab.cli import main
 def test_list(capsys):
     assert main(["list"]) == 0
     out = capsys.readouterr().out
-    assert "models:   cnn, decision_tree, logistic_regression, mlp" in out
+    assert "models:   cnn, decision_tree, logistic_regression, mlp, transformer" in out
     assert (
         "  mlp: 2 inputs -> 4 hidden (ReLU)" in out
         and "[samples: single, batch; features: 2]" in out
     )
-    assert "datasets: blobs, moons, shapes" in out and "sigmoid" in out
+    assert "datasets: blobs, moons, shapes, tokens" in out and "sigmoid" in out
 
 
 def test_demo_json(tmp_path, capsys):

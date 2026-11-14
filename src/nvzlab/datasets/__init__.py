@@ -26,6 +26,7 @@ class Dataset:
     y: np.ndarray
     feature_names: list[str]
     class_names: list[str]
+    vocab: list[str] | None = None  # token names for sequence datasets (X holds ids)
 
     def sample(self, n: int = 1, seed: int = 0) -> tuple[np.ndarray, np.ndarray]:
         """Pick ``n`` rows at random (deterministic for a given ``seed``); arrays are read-only.
@@ -111,7 +112,29 @@ def shapes(seed: int = 0) -> Dataset:
     return Dataset("shapes", x, y, ["R", "G", "B"], list(masks))
 
 
-_DATASETS = {"blobs": blobs, "moons": moons, "shapes": shapes}
+def tokens(seed: int = 0) -> Dataset:
+    """120 sequences of 6 token ids over the vocabulary A..H; label 1 if first == last.
+
+    Balanced: 60 sequences repeat their first token at the end, 60 do not. Solving it needs
+    one position to look at another, which is what attention shows.
+    """
+    rng = np.random.default_rng(seed)
+    vocab = list("ABCDEFGH")
+    n, length = 60, 6
+    x = rng.integers(0, len(vocab), size=(2 * n, length))
+    x[:n, -1] = x[:n, 0]
+    clash = np.flatnonzero(x[n:, -1] == x[n:, 0]) + n
+    x[clash, -1] = (x[clash, -1] + rng.integers(1, len(vocab), size=len(clash))) % len(vocab)
+    y = np.repeat([1, 0], n)
+    order = rng.permutation(2 * n)
+    x, y = x[order].astype(float), y[order]
+    x.setflags(write=False)
+    y.setflags(write=False)
+    names = [f"pos{i + 1}" for i in range(length)]
+    return Dataset("tokens", x, y, names, ["different", "same"], vocab)
+
+
+_DATASETS = {"blobs": blobs, "moons": moons, "shapes": shapes, "tokens": tokens}
 
 
 def load(name: str, **options: int) -> Dataset:

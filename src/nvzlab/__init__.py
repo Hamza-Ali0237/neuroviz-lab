@@ -13,7 +13,7 @@ from nvzlab import datasets, models, ops, viewer  # noqa: E402
 from nvzlab.api import show, trace  # noqa: E402
 from nvzlab.core.op import Op, op  # noqa: E402
 from nvzlab.core.registry import names as _op_names  # noqa: E402
-from nvzlab.core.tape import Tape, context, event, step  # noqa: E402
+from nvzlab.core.tape import Tape, context, event, name, step  # noqa: E402
 from nvzlab.datasets import list_datasets  # noqa: E402
 from nvzlab.models import Model, list_models  # noqa: E402
 from nvzlab.tracing.records import Trace  # noqa: E402
@@ -44,6 +44,7 @@ __all__ = [
     "list_models",
     "list_ops",
     "models",
+    "name",
     "op",
     "ops",
     "show",

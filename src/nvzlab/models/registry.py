@@ -10,12 +10,14 @@ from nvzlab.models.cnn import CNN
 from nvzlab.models.decision_tree import DecisionTree
 from nvzlab.models.logistic_regression import LogisticRegression
 from nvzlab.models.mlp import MLP
+from nvzlab.models.transformer import Transformer
 
 _MODELS: dict[str, type[Model]] = {
     "cnn": CNN,
     "decision_tree": DecisionTree,
     "logistic_regression": LogisticRegression,
     "mlp": MLP,
+    "transformer": Transformer,
 }
 
 
@@ -39,7 +41,7 @@ def list_models() -> dict[str, str]:
     --------
     >>> import nvzlab as nvz
     >>> sorted(nvz.list_models())
-    ['cnn', 'decision_tree', 'logistic_regression', 'mlp']
+    ['cnn', 'decision_tree', 'logistic_regression', 'mlp', 'transformer']
     >>> print(nvz.list_models()["mlp"])  # doctest: +SKIP
     """
     out = {}

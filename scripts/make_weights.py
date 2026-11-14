@@ -10,7 +10,9 @@ Plain NumPy, run offline. Writes to ``src/nvzlab/weights/``:
   ``nvzlab.models.decision_tree.grow`` as arrays ``feature``, ``threshold``, ``left``,
   ``right``, ``counts``;
 - ``cnn.npz``: ``W_conv``, ``b_conv``, ``W_out``, ``b_out`` (full-batch gradient descent on
-  ``shapes`` through the model's own forward function and a ``Tape``) and ``initial_*``.
+  ``shapes`` through the model's own forward function and a ``Tape``) and ``initial_*``;
+- ``transformer.npz``: the mini Transformer's 16 parameter arrays (gradient descent on
+  ``tokens`` the same way) and ``initial_*``.
 
 Run from the repo root: ``python scripts/make_weights.py``.
 """
@@ -23,7 +25,7 @@ import numpy as np
 
 from nvzlab import datasets, ops
 from nvzlab.core.tape import Tape
-from nvzlab.models import cnn
+from nvzlab.models import cnn, transformer
 from nvzlab.models.decision_tree import CRITERIA, MAX_DEPTH, grow
 
 OUT = Path(__file__).resolve().parents[1] / "src" / "nvzlab" / "weights"
@@ -111,6 +113,33 @@ def cnn_initial(seed: int = 3) -> dict[str, np.ndarray]:
     }
 
 
+def transformer_initial(seed: int = 4) -> dict[str, np.ndarray]:
+    rng = np.random.default_rng(seed)
+    d, ff, vocab, length = transformer.D_MODEL, transformer.D_FF, 8, 6
+
+    def normal(*shape):
+        return rng.normal(0.0, 1.0 / np.sqrt(shape[0]), size=shape)
+
+    return {
+        "E_tok": rng.normal(0.0, 0.5, size=(vocab, d)),
+        "E_pos": rng.normal(0.0, 0.5, size=(length, d)),
+        "ln1_gamma": np.ones(d),
+        "ln1_beta": np.zeros(d),
+        "W_q": normal(d, d),
+        "W_k": normal(d, d),
+        "W_v": normal(d, d),
+        "W_o": normal(d, d),
+        "ln2_gamma": np.ones(d),
+        "ln2_beta": np.zeros(d),
+        "W_ff1": normal(d, ff),
+        "b_ff1": np.zeros(ff),
+        "W_ff2": normal(ff, d),
+        "b_ff2": np.zeros(d),
+        "W_out": normal(d, 2),
+        "b_out": np.zeros(2),
+    }
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     for f in (1, 2):
@@ -132,6 +161,12 @@ def main() -> None:
     p = fit_with_tape(cnn.forward, p0, ds.X, ds.y, lr=0.5, epochs=300)
     np.savez(OUT / "cnn.npz", **p, **{"initial_" + k: v for k, v in p0.items()})
     print(f"cnn: train accuracy={accuracy(cnn.forward, p, ds.X, ds.y):.3f}")
+
+    ds = datasets.load("tokens")
+    p0 = transformer_initial()
+    p = fit_with_tape(transformer.forward, p0, ds.X, ds.y, lr=0.5, epochs=1500)
+    np.savez(OUT / "transformer.npz", **p, **{"initial_" + k: v for k, v in p0.items()})
+    print(f"transformer: train accuracy={accuracy(transformer.forward, p, ds.X, ds.y):.3f}")
 
     for name, features in (("blobs", 1), ("blobs", 2), ("moons", 2)):
         ds = datasets.load(name, features=features)

@@ -113,6 +113,13 @@ class Tape:
         self.tensors[tid].note = note
         return tid
 
+    def set_name(self, arr: Any, name: str) -> str:
+        """Give a recorded array a display name (only if it has none yet); returns its id."""
+        tid = self.watch(arr)
+        if self.tensors[tid].name is None:
+            self.tensors[tid].name = name
+        return tid
+
     def tensor_id(self, arr: Any) -> str | None:
         """Tensor id of an array seen by this tape, or ``None``."""
         return self._ids.get(id(arr))
@@ -480,6 +487,25 @@ def event(kind: str, payload: dict[str, Any] | None = None, refs: Sequence[Any] 
     tape = current_tape()
     if tape is not None:
         tape.event(kind, payload, refs)
+
+
+def name(array: Any, name: str) -> Any:
+    """Name an intermediate array in the trace (e.g. ``"attention weights"``); returns it.
+
+    Params, inputs and labels are named already; activations are anonymous unless named
+    here. No-op outside a tape.
+
+    Examples
+    --------
+    >>> import nvzlab as nvz
+    >>> from nvzlab import ops
+    >>> def model(x, p):
+    ...     return nvz.name(ops.softmax(ops.matmul(x, p["W"])), "attention weights")
+    """
+    tape = current_tape()
+    if tape is not None:
+        tape.set_name(array, name)
+    return array
 
 
 def context(name: str, array: Any, note: str) -> None:

@@ -214,3 +214,54 @@ def test_flatten(rng):
     gradcheck(ops.flatten, [x])
     with pytest.raises(ShapeError, match="flatten: expected x with at least 2 dimensions"):
         ops.flatten(np.zeros(3))
+
+
+def test_embedding(rng):
+    ids = rng.integers(0, 8, size=(3, 6)).astype(float)
+    table = rng.normal(size=(8, 4))
+    np.testing.assert_array_equal(ops.embedding(ids, table), table[ids.astype(int)])
+    gradcheck(ops.embedding, [ids, table], diff=[1])
+    assert (
+        ops.embedding.backward(ops.embedding.forward(ids, table)[1], np.ones((3, 6, 4)))[0] is None
+    )
+    with pytest.raises(ShapeError, match=r"integer token ids in \[0, 7\]"):
+        ops.embedding(np.array([[8.0]]), table)
+    with pytest.raises(ShapeError, match=r"integer token ids in \[0, 7\]"):
+        ops.embedding(np.array([[1.5]]), table)
+
+
+def test_layernorm(rng):
+    x, g, b = rng.normal(size=(2, 3, 5)) * 3, rng.normal(size=5), rng.normal(size=5)
+    out = ops.layernorm(x, np.ones(5), np.zeros(5))
+    np.testing.assert_allclose(out.mean(axis=-1), 0.0, atol=1e-12)
+    np.testing.assert_allclose(out.var(axis=-1), 1.0, atol=1e-4)
+    gradcheck(ops.layernorm, [x, g, b])
+    gradcheck(ops.layernorm, [rng.normal(size=(4, 5)), g, b], eps=1e-3)
+    with pytest.raises(ShapeError, match=r"gamma and beta with shape \(5,\)"):
+        ops.layernorm(x, np.ones(4), np.zeros(5))
+
+
+def test_transpose_and_scale(rng):
+    x = rng.normal(size=(2, 3, 4))
+    assert ops.transpose(x, axes=(0, 2, 1)).shape == (2, 4, 3)
+    gradcheck(ops.transpose, [x], axes=(2, 0, 1))
+    with pytest.raises(ShapeError, match="axes to be a permutation of 0..2"):
+        ops.transpose(x, axes=(0, 1))
+    np.testing.assert_allclose(ops.scale(x, c=0.25), x / 4)
+    gradcheck(ops.scale, [x], c=1 / 8**0.5)
+    with pytest.raises(ShapeError, match="c to be a plain number"):
+        ops.scale(x, c="2")
+
+
+def test_matmul_batched_and_linear_nd(rng):
+    a, b = rng.normal(size=(2, 3, 4)), rng.normal(size=(2, 4, 5))
+    np.testing.assert_allclose(ops.matmul(a, b), a @ b)
+    gradcheck(ops.matmul, [a, b])
+    gradcheck(ops.matmul, [a, rng.normal(size=(4, 5))])  # shared weight over the batch
+    with pytest.raises(ShapeError, match="batch dimensions that broadcast"):
+        ops.matmul(a, rng.normal(size=(3, 4, 5)))
+    x, w, bias = rng.normal(size=(2, 3, 5)), rng.normal(size=(5, 3)), rng.normal(size=3)
+    np.testing.assert_allclose(ops.linear(x, w, bias), x @ w + bias)
+    gradcheck(ops.linear, [x, w, bias])
+    with pytest.raises(ShapeError, match=r"w with shape \(5,\) or \(5, m\)"):
+        ops.linear(x, rng.normal(size=5), np.zeros(1))
