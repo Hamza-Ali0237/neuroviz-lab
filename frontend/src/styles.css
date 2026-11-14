@@ -12,6 +12,11 @@
   --update: #16a34a;
   --pt0: #0e7490;
   --pt1: #b45309;
+  /* Categorical series colours (per feature, per series); distinct from the four phase colours. */
+  --cat0: #7c3aed;
+  --cat1: #0f766e;
+  --cat2: #be185d;
+  --cat3: #4d7c0f;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, "Segoe UI", Inter, Roboto, sans-serif;
   color-scheme: light dark;
@@ -31,6 +36,10 @@
     --update: #4ade80;
     --pt0: #22d3ee;
     --pt1: #fbbf24;
+    --cat0: #a78bfa;
+    --cat1: #2dd4bf;
+    --cat2: #f472b6;
+    --cat3: #a3e635;
   }
 }
 
@@ -143,6 +152,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-worked { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 10px 0; }
 .nvz-worked-line { margin: 4px 0; overflow-wrap: anywhere; }
 .nvz-worked-line .lhs { color: var(--phase, var(--accent)); font-weight: 600; }
+.nvz-worked-line.derived { color: var(--muted); }
+.nvz-worked-line.derived .lhs { color: var(--muted); font-weight: 500; }
 .nvz-table { border-collapse: collapse; }
 .nvz-table th, .nvz-table td { padding: 4px 12px; text-align: right; border-bottom: 1px solid var(--border); }
 .nvz-table tr { cursor: pointer; }
@@ -227,7 +238,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* Capture mode: a fixed stage (1080×1080 or 1080×1920) scaled to fit, no controls, large type. */
 .nvz-capture-root { position: fixed; inset: 0; background: var(--bg); overflow: hidden; }
-.nvz-capture { position: absolute; left: 50%; top: 50%; transform-origin: center; background: var(--bg); color: var(--fg); font-size: 28px; line-height: 1.35; display: flex; flex-direction: column; padding: 36px 44px 40px; gap: 24px; }
+.nvz-capture { position: absolute; left: 50%; top: 50%; transform-origin: center; background: var(--bg); color: var(--fg); font-size: 28px; line-height: 1.35; display: flex; flex-direction: column; padding: 24px 28px 28px; gap: 16px; }
 .nvz-capture-title { display: flex; align-items: center; gap: 22px; font-size: 30px; white-space: nowrap; overflow: hidden; }
 .nvz-capture-title .nvz-brand { font-size: 32px; }
 .nvz-capture-model { text-transform: capitalize; color: var(--muted); }
@@ -235,7 +246,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-capture-dot { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: var(--phase); vertical-align: -2px; margin-right: 6px; }
 .nvz-capture-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .nvz-capture .nvz-scene2d { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 24px; }
-.nvz-capture .nvz-scene { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 24px; border-radius: 20px; }
+.nvz-capture .nvz-scene { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 18px 20px; border-radius: 20px; }
 .nvz-capture .nvz-scene svg { flex: 1; min-height: 0; width: auto; height: auto; max-width: 100%; align-self: center; }
 .nvz-capture .nvz-scene figcaption { order: 2; font-size: 34px; line-height: 1.3; margin: 18px 0 0; }
 .nvz-capture .nvz-scene-legend { order: 1; font-size: 24px; gap: 26px; margin: 14px 0 0; }
@@ -246,10 +257,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-capture .nvz-cell { min-width: 96px; padding: 8px 14px; font-size: 24px; }
 .nvz-capture .nvz-scene3d { flex: 1; min-height: 0; gap: 20px; }
 .nvz-capture .nvz-canvas3d { border-radius: 20px; min-height: 0; }
-.nvz-capture-vertical .nvz-canvas3d { flex: none; height: 1240px; }
+.nvz-capture-vertical .nvz-canvas3d { flex: none; height: 1320px; }
 .nvz-capture .nvz-3d-caption { font-size: 30px; line-height: 1.3; color: var(--fg); max-width: none; }
 .nvz-capture .nvz-3d-label { font-size: 26px; padding: 4px 12px; border-radius: 8px; }
 .nvz-capture .nvz-3d-value { font-size: 22px; }
+/* The 420-unit viewBox renders ~2.4× at 1080 wide: 11px ticks ≈ 26 px, 13px labels ≈ 31 px. */
 .nvz-capture .nvz-tick { font-size: 11px; }
 .nvz-capture .nvz-axis-label { font-size: 13px; }
 
@@ -262,14 +274,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-neuron circle { stroke: var(--border); stroke-width: 1.5; transition: fill 200ms ease; }
 .nvz-neuron.lit circle { stroke: var(--fg); cursor: pointer; }
 .nvz-neuron.selected circle { stroke: var(--sel); stroke-width: 4; }
-.nvz-neuron-value { font-family: var(--mono); font-size: 9px; fill: var(--fg); pointer-events: none; }
+.nvz-neuron-value { font-family: var(--mono); font-size: 8px; fill: var(--fg); pointer-events: none; }
 .nvz-neuron:not(.lit) .nvz-neuron-value { fill: var(--muted); }
 .nvz-scene-legend i.nvz-edge-pos { width: 18px; height: 0; border-top: 3px solid rgb(37, 99, 235); border-radius: 0; }
 .nvz-scene-legend i.nvz-edge-neg { width: 18px; height: 0; border-top: 3px solid rgb(234, 88, 12); border-radius: 0; }
 .nvz-scene-legend i.nvz-neuron-dim { background: var(--panel); border: 1.5px solid var(--border); }
 .nvz-capture .nvz-mlp-scene { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; align-items: stretch; }
 .nvz-capture-vertical .nvz-mlp-scene { grid-template-columns: 1fr; }
-.nvz-capture .nvz-neuron-value { font-size: 8px; }
+.nvz-capture .nvz-neuron-value { font-size: 7.5px; }
 
 /* Decision tree scenes */
 .nvz-tree-scene { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
@@ -290,10 +302,11 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-count-1 { fill: var(--pt1); }
 .nvz-scene-legend i.nvz-tree-lit { background: var(--accent); }
 .nvz-split-line polyline { fill: none; stroke-width: 1.8; }
-.nvz-split-f0 polyline, .nvz-split-f0 circle, i.nvz-split-swatch.nvz-split-f0 { stroke: var(--accent); fill: var(--accent); background: var(--accent); }
-.nvz-split-f0 polyline { fill: none; }
-.nvz-split-f1 polyline, .nvz-split-f1 circle, i.nvz-split-swatch.nvz-split-f1 { stroke: var(--loss); fill: var(--loss); background: var(--loss); }
-.nvz-split-f1 polyline { fill: none; }
+.nvz-split-f0 polyline, .nvz-split-f0 circle, i.nvz-split-swatch.nvz-split-f0 { stroke: var(--cat0); fill: var(--cat0); background: var(--cat0); }
+.nvz-split-f1 polyline, .nvz-split-f1 circle, i.nvz-split-swatch.nvz-split-f1 { stroke: var(--cat1); fill: var(--cat1); background: var(--cat1); }
+.nvz-split-f2 polyline, .nvz-split-f2 circle, i.nvz-split-swatch.nvz-split-f2 { stroke: var(--cat2); fill: var(--cat2); background: var(--cat2); }
+.nvz-split-f3 polyline, .nvz-split-f3 circle, i.nvz-split-swatch.nvz-split-f3 { stroke: var(--cat3); fill: var(--cat3); background: var(--cat3); }
+.nvz-split-line polyline { fill: none; }
 .nvz-split-chosen circle { fill: none; stroke: var(--fg); stroke-width: 2.5; }
 .nvz-scene-legend i.nvz-split-ring { background: none; border: 2px solid var(--fg); }
 .nvz-split-formula { margin-top: 10px; font-size: 14px; }
@@ -311,3 +324,55 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-capture .nvz-tree-rule { font-size: 9px; }
 .nvz-capture .nvz-split-formula { font-size: 24px; }
 .nvz-capture .nvz-split-formula p { max-width: none; }
+/* Capture keeps the split criterion's name and formula; the prose stays in the interactive viewer. */
+.nvz-capture .nvz-split-formula { display: none; }
+
+/* Channel grids: (C, H, W) blocks as small heat-map tiles, RGB picture for 3-channel inputs */
+.nvz-matrix-image { display: flex; flex-direction: column; gap: 8px; }
+.nvz-channels { margin: 0; }
+/* The caption contributes no width of its own (width 0, then stretched), so a long caption wraps above the grids instead of widening the block. */
+.nvz-channels figcaption { font-size: 14px; margin-bottom: 4px; width: 0; min-width: 100%; }
+.nvz-channel-row { display: flex; gap: 14px; flex-wrap: nowrap; align-items: flex-end; }
+.nvz-channel { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.nvz-channel-label { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+.nvz-channels table { border-collapse: collapse; }
+.nvz-channels .nvz-px { min-width: 0; width: 18px; height: 18px; padding: 0; border-radius: 2px; border: 1px solid var(--border); font-size: 10px; text-align: center; }
+.nvz-channels.numbers .nvz-px { width: 46px; height: 24px; font-size: 12px; }
+.nvz-channels .nvz-px.rf { outline: 2px solid var(--accent); outline-offset: -2px; }
+.nvz-channels .nvz-px.win { box-shadow: inset 0 0 0 3px var(--cat2); }
+.nvz-channels .nvz-px.win-top { border-top: 2px solid var(--fg); }
+.nvz-channels .nvz-px.win-left { border-left: 2px solid var(--fg); }
+.nvz-channels .nvz-px.selected { outline: 2px solid var(--fg); outline-offset: 0; box-shadow: 0 0 0 3px var(--sel); z-index: 1; position: relative; }
+.nvz-rgb { width: 144px; height: 144px; display: block; border: 1px solid var(--border); border-radius: 3px; image-rendering: pixelated; }
+.nvz-rgb .nvz-rf-box { fill: none; stroke: var(--accent); stroke-width: 0.25; }
+.nvz-cnn .nvz-cnn-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.nvz-cnn-op { font-size: 26px; color: var(--muted); }
+.nvz-plot-first .nvz-flow > .nvz-cnn, .nvz-plot-first .nvz-flow > .nvz-attention, .nvz-plot-first .nvz-flow > .nvz-embedding { max-width: none; }
+.nvz-capture .nvz-channels .nvz-px { width: 24px; height: 24px; }
+.nvz-capture .nvz-channels.numbers .nvz-px { width: 58px; height: 32px; font-size: 14px; }
+.nvz-capture .nvz-rgb { width: 200px; height: 200px; }
+.nvz-capture .nvz-channel-row { gap: 12px; }
+.nvz-capture .nvz-channel-label, .nvz-capture .nvz-channels figcaption { font-size: 22px; }
+.nvz-capture .nvz-cnn .nvz-cnn-row { gap: 12px 14px; justify-content: center; }
+.nvz-capture .nvz-cnn .nvz-channels { min-width: 260px; }
+.nvz-capture .nvz-cnn-op { font-size: 34px; }
+.nvz-capture .nvz-cnn figcaption, .nvz-capture .nvz-attention figcaption, .nvz-capture .nvz-embedding figcaption { order: 0; font-size: 28px; margin: 0 0 8px; }
+.nvz-capture .nvz-worked { font-size: 22px; }
+.nvz-capture .nvz-worked h4 { font-size: 18px; }
+.nvz-capture .nvz-cnn .nvz-worked-line { margin: 4px 0; font-size: 18px; line-height: 1.4; }
+.nvz-capture .nvz-cnn .nvz-text { font-size: 20px; margin: 2px 0; }
+
+/* Attention map and embedding picks */
+.nvz-attn { border-collapse: separate; border-spacing: 3px; }
+.nvz-attn th { font-weight: 500; color: var(--muted); font-size: 13px; padding: 2px 6px; }
+.nvz-attn tbody tr { cursor: pointer; }
+.nvz-attn tbody tr:hover th { color: var(--fg); }
+.nvz-attn tbody tr.selected th { color: var(--fg); font-weight: 700; }
+.nvz-attn tbody tr.selected .nvz-cell { border-color: var(--fg); }
+.nvz-softmax-row th { text-align: left; color: var(--muted); font-weight: 500; }
+.nvz-embedding tbody tr { cursor: pointer; }
+.nvz-embedding tbody tr.selected td { background: color-mix(in srgb, var(--sel) 45%, transparent); }
+.nvz-capture .nvz-attn .nvz-cell { min-width: 118px; padding: 16px 12px; font-size: 28px; }
+.nvz-capture .nvz-attn th { font-size: 26px; }
+.nvz-capture .nvz-softmax-row th, .nvz-capture .nvz-softmax-row td { font-size: 22px; padding: 6px 12px; }
+.nvz-capture .nvz-table { align-self: center; }

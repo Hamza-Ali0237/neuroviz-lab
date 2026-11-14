@@ -21,7 +21,7 @@ export function NetworkDiagram() {
   const { layers, edges, backward } = view;
   const cols = layers.map((_, l) => PAD + 30 + (l * (W - 2 * PAD - 60)) / (layers.length - 1));
   const ys = (size: number) => Array.from({ length: size }, (_, j) => H / 2 + (j - (size - 1) / 2) * 52);
-  const R = 17;
+  const R = 19;
   const edgeLines = (e: EdgeView, l: number) => {
     const t = e.tensor;
     const [nIn, nOut] = t.shape;

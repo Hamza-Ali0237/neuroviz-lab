@@ -4,42 +4,14 @@ import { eventLabel, fmt, fmtTerm, keyLabel, sub, shapeStr } from "../../format"
 import { unflatIndex } from "../../trace/load";
 import { MatrixView } from "./MatrixView";
 import { OpCard } from "./OpCard";
+import { Worked } from "./WorkedView";
 import { LRScene } from "./LRScene";
 import { MLPScene } from "./MLPScene";
 import { TreeScene } from "./TreeScene";
+import { CNNScene, cnnNode } from "./CNNScene";
+import { TransformerScene, attentionNode } from "./TransformerScene";
 import { treeAt } from "../tree";
 import { mlpView } from "../mlp";
-import { worked } from "./worked";
-
-/** Worked computation for the selected (or first) output cell of a node. */
-function Worked({ node }: { node: NodeRecord }) {
-  const { trace, selection, sampleIndex } = useAppState();
-  const selectedHere = selection.tensorId && selection.index && node.outputs.includes(selection.tensorId);
-  const outId = selectedHere ? selection.tensorId! : node.outputs[0];
-  if (!outId) return null;
-  const t = trace.tensor(outId);
-  const defaultIndex = t.shape.map((d, i) => (i === 0 && d === trace.raw.mode.n_samples && t.role !== "param" ? sampleIndex : 0));
-  const index = selectedHere ? selection.index! : defaultIndex;
-  const lines = worked(trace, node, outId, index);
-  const where = `${trace.label(outId)}[${index.join(", ")}]`;
-  return (
-    <div className="nvz-worked">
-      <h4>
-        Worked computation <span className="nvz-muted">for {where}</span>
-        {!selectedHere && <span className="nvz-muted"> · click any output cell to change</span>}
-      </h4>
-      {lines ? (
-        lines.map((l, i) => (
-          <p key={i} className="mono nvz-worked-line">
-            <span className="lhs">{l.lhs}</span> = {l.expr} = <b>{fmt(l.value)}</b>
-          </p>
-        ))
-      ) : (
-        <p className="nvz-muted">No worked arithmetic rule for “{node.op}”; the values above are from the trace.</p>
-      )}
-    </div>
-  );
-}
 
 function NodeView({ node }: { node: NodeRecord }) {
   const { trace, selection } = useAppState();
@@ -166,7 +138,20 @@ function ModelScene() {
   if (trace.raw.model.family === "linear" && [1, 2].includes(trace.raw.mode.n_features)) return <LRScene />;
   if (trace.raw.model.family === "mlp") return <MLPScene />;
   if (trace.raw.model.family === "tree") return <TreeScene />;
+  if (trace.raw.model.family === "cnn") return <CNNScene />;
+  if (trace.raw.model.family === "transformer") return <TransformerScene />;
   return null;
+}
+
+/** Whether the model scene has something to draw at this step (capture mode falls back to the ops otherwise). */
+function sceneAt(trace: ReturnType<typeof useAppState>["trace"], stepIndex: number): boolean {
+  const fam = trace.raw.model.family;
+  if (fam === "cnn") return cnnNode(trace, stepIndex) !== null;
+  if (fam === "transformer") {
+    const attn = attentionNode(trace);
+    return trace.nodesInStep(stepIndex).some((n) => n.op === "embedding" && n.phase === "forward") || (!!attn && attn.step <= stepIndex);
+  }
+  return true;
 }
 
 /** Whether the trace has a model-specific 2D scene. */
@@ -174,6 +159,8 @@ export function hasModelScene(trace: ReturnType<typeof useAppState>["trace"]): b
   if (trace.raw.model.family === "linear") return [1, 2].includes(trace.raw.mode.n_features);
   if (trace.raw.model.family === "mlp") return mlpView(trace, 0, 0) !== null;
   if (trace.raw.model.family === "tree") return treeAt(trace, trace.steps.length - 1) !== null;
+  if (trace.raw.model.family === "cnn") return trace.raw.nodes.some((n) => n.op === "conv2d");
+  if (trace.raw.model.family === "transformer") return attentionNode(trace) !== null;
   return false;
 }
 
@@ -182,7 +169,7 @@ export function Scene2D() {
   const step = trace.steps[stepIndex];
   const nodes = trace.nodesInStep(stepIndex);
   const events = trace.eventsInStep(stepIndex);
-  const hasScene = hasModelScene(trace);
+  const hasScene = hasModelScene(trace) && sceneAt(trace, stepIndex);
   if (capture) {
     // Capture mode: the scene alone, large; the flow of ops only when the model has no scene.
     return (
@@ -193,7 +180,7 @@ export function Scene2D() {
     );
   }
   // Forward steps: the model's plot comes first so it is visible without scrolling.
-  const plotFirst = hasScene && (step.phase === "forward" || trace.raw.model.family === "tree");
+  const plotFirst = hasScene && (step.phase === "forward" || ["tree", "cnn", "transformer"].includes(trace.raw.model.family));
   return (
     <div className={`nvz-scene2d ${plotFirst ? "nvz-plot-first" : ""}`}>
       <div className="nvz-flow">

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import { useAppState, useDispatch } from "../../state/store";
@@ -8,8 +8,11 @@ import { mlpView, probGridAt } from "../mlp";
 import { dataBounds, regions, rule, treeAt } from "../tree";
 import { NEG_RGB, POS_RGB } from "../../format";
 import { Axes, Label, SIZE, Surface, bilinear, cellColor, orbitPosition, span, useTheme } from "./common";
+import { cnnNode } from "../r2d/CNNScene";
+import { attentionNode } from "../r2d/TransformerScene";
+import { tokenLabels } from "../tokens";
 
-export type SceneId = "probability" | "loss" | "tensors" | "network" | "surface" | "regions";
+export type SceneId = "probability" | "loss" | "tensors" | "network" | "surface" | "regions" | "conv" | "attention";
 
 export interface SceneDef {
   id: SceneId;
@@ -212,6 +215,11 @@ export function NetworkScene() {
                   emissiveIntensity={0.7}
                 />
               </mesh>
+              {/* Outline shell: a slightly larger back-face sphere, so a zero-valued (panel-coloured) neuron never vanishes. */}
+              <mesh position={pos(l, j)} scale={1.07}>
+                <sphereGeometry args={[0.2, 20, 20]} />
+                <meshBasicMaterial color={lit ? theme.fg : theme.border} side={THREE.BackSide} transparent={!lit} opacity={lit ? 1 : 0.5} />
+              </mesh>
               {lit && (
                 <Label at={[lx(l), ny - 0.42, nz(layer.size, j)]} title={layer.tensorId ? `${trace.label(layer.tensorId)}[${sampleIndex}, ${j}] = ${v}` : undefined}>
                   <span className="nvz-3d-value">{fmt(v!)}</span>
@@ -276,20 +284,25 @@ export function LossLandscape() {
     <group position={[0, -SIZE / 4, 0]}>
       <Axes x={{ name: n0, lo: lo0, hi: hi0 }} z={{ name: n1, lo: lo1, hi: hi1 }} y={{ name: "loss", lo: min, hi: max }} colors={theme} />
       <Surface xs={xs} zs={zs} heights={heights} color={color} opacity={0.9} />
-      {scenePath.length > 1 && <Line points={scenePath} color={theme.muted} lineWidth={1.5} dashed dashSize={0.1} gapSize={0.06} />}
-      {reached > 0 && <Line points={scenePath.slice(0, reached + 1)} color={theme.fg} lineWidth={3} />}
-      {scenePath.length > 0 && <Label at={[scenePath[0][0], scenePath[0][1] - 0.2, scenePath[0][2]]} muted>start</Label>}
-      {scenePath.map((pt, k) => (
-        <mesh key={k} position={pt}>
-          <sphereGeometry args={[0.045, 12, 12]} />
-          <meshStandardMaterial color={k <= reached ? theme.fg : theme.muted} />
-        </mesh>
-      ))}
-      <mesh position={current}>
-        <sphereGeometry args={[0.09, 16, 16]} />
-        <meshStandardMaterial color={theme.accent} emissive={theme.accent} emissiveIntensity={0.4} />
-      </mesh>
-      <Label at={[current[0], current[1] + 0.35, current[2]]}>
+      {scenePath.length > 1 && <Line points={scenePath} color={theme.muted} lineWidth={2.5} dashed dashSize={0.1} gapSize={0.06} />}
+      {reached > 0 && <Line points={scenePath.slice(0, reached + 1)} color={theme.fg} lineWidth={5} />}
+      {scenePath.map((pt, k) => {
+        const l = lossPath && k < lossPath.length ? lossPath[k] : null;
+        const isCurrent = k === Math.min(reached, scenePath.length - 1);
+        // Iteration dots are numbered; their exact loss sits below the dot, the current marker's label above it.
+        return (
+          <group key={k}>
+            <mesh position={pt}>
+              <sphereGeometry args={[isCurrent ? 0.1 : 0.06, 16, 16]} />
+              <meshStandardMaterial color={isCurrent ? theme.accent : k <= reached ? theme.fg : theme.muted} emissive={isCurrent ? theme.accent : new THREE.Color(0)} emissiveIntensity={0.4} />
+            </mesh>
+            <Label at={[pt[0], pt[1] - 0.26, pt[2]]} muted={!isCurrent}>
+              {`${k}${k === 0 ? " start" : ""}${l === null ? "" : ` · loss ${fmt(l)}`}`}
+            </Label>
+          </group>
+        );
+      })}
+      <Label at={[current[0], current[1] + 0.4, current[2]]}>
         {`${n0} = ${fmt(path[Math.min(reached, path.length - 1)][0])}, ${n1} = ${fmt(path[Math.min(reached, path.length - 1)][1])}${currentLoss === null ? "" : ` · loss = ${fmt(currentLoss)}`}`}
       </Label>
     </group>
@@ -297,40 +310,49 @@ export function LossLandscape() {
 }
 
 /** One tensor as an instanced grid of cells; a wireframe box marks the selected cell. */
-function CellPlane({ t, step, z, cell, gap, active }: {
+export function CellPlane({ t, step, z, cell, gap, active, prefix = [], title, at = [0, 0.2] }: {
   t: { id: string; shape: number[]; size: number; values: Float32Array | null; stats: { min: number; max: number } };
   step: number;
   z: number;
   cell: number;
   gap: number;
   active: boolean;
+  /** Fixed leading indices: draw only the block t[...prefix] (its last two dims as rows × cols). */
+  prefix?: number[];
+  /** Label above the plane (default: step title · tensor name (shape)). */
+  title?: string;
+  /** x, y position of the plane's bottom centre. */
+  at?: [number, number];
 }) {
   const { trace, selection, sampleIndex } = useAppState();
   const dispatch = useDispatch();
   const theme = useTheme();
   const ref = useRef<THREE.InstancedMesh>(null);
-  const cols = t.shape.length ? t.shape[t.shape.length - 1] : 1;
-  const rows = t.size / cols;
+  const rest = t.shape.slice(prefix.length);
+  const cols = rest.length ? rest[rest.length - 1] : 1;
+  const count = rest.reduce((a, b) => a * b, 1);
+  const rows = count / cols;
+  const base = prefix.length ? flatIndex(t.shape, [...prefix, ...rest.map(() => 0)]) : 0;
   const pitch = cell + gap;
   const w = cols * pitch;
   const h = rows * pitch;
   const absMax = Math.max(Math.abs(t.stats.min), Math.abs(t.stats.max), 1e-12);
-  const perSample = t.shape.length >= 1 && t.shape[0] === trace.raw.mode.n_samples && trace.raw.mode.n_samples > 1;
-  const selectedFlat = selection.tensorId === t.id && selection.index ? flatIndex(t.shape, selection.index) : -1;
+  const perSample = !prefix.length && t.shape.length >= 1 && t.shape[0] === trace.raw.mode.n_samples && trace.raw.mode.n_samples > 1;
+  const selectedFlat = selection.tensorId === t.id && selection.index ? flatIndex(t.shape, selection.index) - base : -1;
   const place = (flat: number): [number, number, number] => [(flat % cols - (cols - 1) / 2) * pitch, h - (Math.floor(flat / cols) + 0.5) * pitch, 0];
   const values = t.values;
   useLayoutEffect(() => {
     const m = ref.current;
     if (!m || !values) return;
     const o = new THREE.Object3D();
-    for (let flat = 0; flat < values.length; flat++) {
+    for (let flat = 0; flat < count; flat++) {
       const [px, py] = place(flat);
       const isSample = perSample && unflatIndex(t.shape, flat)[0] === sampleIndex;
       o.position.set(px, py, 0);
       o.scale.set(1, 1, flat === selectedFlat ? 0.8 : 0.3);
       o.updateMatrix();
       m.setMatrixAt(flat, o.matrix);
-      const c = cellColor(values[flat], absMax, theme.panel);
+      const c = cellColor(values[base + flat], absMax, theme.panel);
       if (flat === selectedFlat) c.lerp(theme.sel, 0.6);
       else if (isSample && active) c.lerp(theme.accent, 0.25);
       m.setColorAt(flat, c);
@@ -340,23 +362,23 @@ function CellPlane({ t, step, z, cell, gap, active }: {
   }); // every render: cheap (one loop), and selection/sample/theme all feed the colours
   if (!values) return null;
   const select = (flat: number) => {
-    const idx = unflatIndex(t.shape, flat);
+    const idx = unflatIndex(t.shape, base + flat);
     dispatch({ type: "select", selection: { tensorId: t.id, index: idx } });
     if (perSample) dispatch({ type: "sample", index: idx[0] });
   };
   // Value labels: the whole plane when it is current and the cells are big enough to hold
   // the text; otherwise only the selected cell, so labels never spill over plane edges.
-  const labelAll = active && values.length <= 64 && cell >= 0.3;
-  const labelled = labelAll ? Array.from(values, (_, i) => i) : selectedFlat >= 0 ? [selectedFlat] : [];
+  const labelAll = active && count <= 64 && cell >= 0.3;
+  const labelled = labelAll ? Array.from({ length: count }, (_, i) => i) : selectedFlat >= 0 && selectedFlat < count ? [selectedFlat] : [];
   return (
-    <group position={[0, 0.2, z]}>
+    <group position={[at[0], at[1], z]}>
       <Label at={[0, h + 0.3, 0]} muted={!active}>
-        {`${trace.steps[step].title} · ${trace.label(t.id)} (${t.shape.join(", ")})`}
+        {title ?? `${trace.steps[step].title} · ${trace.label(t.id)} (${t.shape.join(", ")})`}
       </Label>
       <instancedMesh
-        key={`${t.id}:${values.length}`}
+        key={`${t.id}:${prefix.join(",")}:${count}`}
         ref={ref}
-        args={[undefined, undefined, values.length]}
+        args={[undefined, undefined, count]}
         onClick={(e) => {
           e.stopPropagation();
           if (e.instanceId !== undefined) select(e.instanceId);
@@ -365,7 +387,7 @@ function CellPlane({ t, step, z, cell, gap, active }: {
         <boxGeometry args={[cell, cell, cell]} />
         <meshStandardMaterial transparent opacity={active ? 1 : 0.3} />
       </instancedMesh>
-      {selectedFlat >= 0 && (
+      {selectedFlat >= 0 && selectedFlat < count && (
         <mesh position={place(selectedFlat)}>
           <boxGeometry args={[cell * 1.08, cell * 1.08, cell * 0.85]} />
           <meshBasicMaterial color={theme.fg} wireframe />
@@ -373,10 +395,10 @@ function CellPlane({ t, step, z, cell, gap, active }: {
       )}
       {labelled.map((flat) => {
         const [px, py] = place(flat);
-        const idx = unflatIndex(t.shape, flat);
+        const idx = unflatIndex(t.shape, base + flat);
         return (
-          <Label key={flat} at={[px, py, cell * 0.5]} onClick={() => select(flat)} title={`${trace.label(t.id)}[${idx.join(", ")}] = ${values[flat]}`}>
-            <span className="nvz-3d-value">{fmt(values[flat])}</span>
+          <Label key={flat} at={[px, py, cell * 0.5]} onClick={() => select(flat)} title={`${trace.label(t.id)}[${idx.join(", ")}] = ${values[base + flat]}`}>
+            <span className="nvz-3d-value">{fmt(values[base + flat])}</span>
           </Label>
         );
       })}
@@ -432,6 +454,7 @@ export function RegionsScene() {
   const { trace, stepIndex, sampleIndex, selection } = useAppState();
   const dispatch = useDispatch();
   const theme = useTheme();
+  const [hovered, setHovered] = useState<number | null>(null);
   const tree = treeAt(trace, stepIndex);
   const bounds = dataBounds(trace);
   const x = trace.byRole("input", "x");
@@ -446,7 +469,8 @@ export function RegionsScene() {
   const [lo2, hi2] = nf > 1 ? bounds[1] : [0, 1];
   const s1 = span(lo1, hi1);
   const s2 = span(lo2, hi2);
-  const sy = (p: number) => Math.max(0.02, p * (SIZE / 2)); // same scale as the Axes y range 0..1
+  const yTop = SIZE / 4; // half the cube: boxes stay low so the dataset on the floor remains visible
+  const sy = (p: number) => Math.max(0.02, p * yTop); // same scale as the Axes y range 0..1
   const regs = regions(tree, bounds);
   const splitting = tree.split?.node ?? null;
   const path = tree.paths[sampleIndex] ?? [];
@@ -456,7 +480,7 @@ export function RegionsScene() {
   const selRow = x && selection.tensorId === x.id && selection.index ? selection.index[0] : -1;
   return (
     <group position={[0, -SIZE / 4, 0]}>
-      <Axes x={{ name: names[0], lo: lo1, hi: hi1 }} z={{ name: nf > 1 ? names[1] : "", lo: lo2, hi: hi2 }} y={{ name: "p(class 1)", lo: 0, hi: 1 }} colors={theme} />
+      <Axes x={{ name: names[0], lo: lo1, hi: hi1 }} z={{ name: nf > 1 ? names[1] : "", lo: lo2, hi: hi2 }} y={{ name: "p(class 1)", lo: 0, hi: 1 }} colors={theme} yHeight={yTop} />
       {regs.map(({ node, bounds: b }) => {
         const w = s1(b[0][1]) - s1(b[0][0]);
         const d = nf > 1 ? s2(b[1][1]) - s2(b[1][0]) : SIZE;
@@ -468,12 +492,17 @@ export function RegionsScene() {
         const colour = theme.pt0.clone().lerp(theme.pt1, p1).lerp(theme.panel, 0.3);
         return (
           <group key={node.id}>
-            <mesh position={[cx, hgt / 2, cz]} onClick={(e) => { e.stopPropagation(); if (x) dispatch({ type: "select", selection: { tensorId: x.id, index: [sampleIndex, 0] } }); }}>
+            <mesh
+              position={[cx, hgt / 2, cz]}
+              onClick={(e) => { e.stopPropagation(); if (x) dispatch({ type: "select", selection: { tensorId: x.id, index: [sampleIndex, 0] } }); }}
+              onPointerOver={(e) => { e.stopPropagation(); setHovered(node.id); }}
+              onPointerOut={() => setHovered((h) => (h === node.id ? null : h))}
+            >
               <boxGeometry args={[Math.max(0.01, w - 0.02), hgt, Math.max(0.01, d - 0.02)]} />
-              <meshStandardMaterial color={colour} transparent opacity={node.pending ? 0.25 : 0.45} depthWrite={false} emissive={hot ? theme.accent : new THREE.Color(0)} emissiveIntensity={0.35} />
+              <meshStandardMaterial color={colour} transparent opacity={node.pending ? 0.12 : hot ? 0.4 : 0.22} depthWrite={false} emissive={hot ? theme.accent : new THREE.Color(0)} emissiveIntensity={0.35} />
             </mesh>
-            <Line points={[[cx - w / 2, hgt, cz - d / 2], [cx + w / 2, hgt, cz - d / 2], [cx + w / 2, hgt, cz + d / 2], [cx - w / 2, hgt, cz + d / 2], [cx - w / 2, hgt, cz - d / 2]]} color={hot ? theme.accent : theme.fg} lineWidth={hot ? 2.5 : 1} transparent opacity={0.7} />
-            <Label at={[cx, hgt + 0.22, cz]} muted={!hot}>{`node ${node.id}: p₁ = ${fmt(p1)}${node.feature !== null ? ` · ${rule(node)}` : ""}`}</Label>
+            <Line points={[[cx - w / 2, hgt, cz - d / 2], [cx + w / 2, hgt, cz - d / 2], [cx + w / 2, hgt, cz + d / 2], [cx - w / 2, hgt, cz + d / 2], [cx - w / 2, hgt, cz - d / 2]]} color={hot ? theme.accent : theme.fg} lineWidth={hot ? 2.5 : 1} transparent opacity={hot ? 0.9 : 0.45} />
+            {(hot || hovered === node.id) && <Label at={[cx, hgt + 0.22, cz]}>{`node ${node.id}: p₁ = ${fmt(p1)}${node.feature !== null ? ` · ${rule(node)}` : ""}`}</Label>}
           </group>
         );
       })}
@@ -503,6 +532,124 @@ export function RegionsScene() {
   );
 }
 
+
+/**
+ * CNN convolution in space: the input's channels as stacked planes, the output feature maps
+ * as stacked planes behind them, and a translucent box around the 3×3×3 receptive-field
+ * volume that produced the selected output cell (default: map 0, cell (0, 0)).
+ */
+export function ConvStack() {
+  const { trace, stepIndex, selection, sampleIndex } = useAppState();
+  const theme = useTheme();
+  const node = trace.raw.nodes.find((n) => n.op === "conv2d" && n.phase === "forward") ?? null;
+  if (!node) return null;
+  const [xId, wId] = node.inputs;
+  const outId = node.outputs[0];
+  const x = trace.tensor(xId);
+  const out = trace.tensor(outId);
+  const [, C, H, W] = x.shape;
+  const [, O, HO, WO] = out.shape;
+  const [, , kh, kw] = trace.tensor(wId).shape;
+  const s = (node.attrs.stride as number | undefined) ?? 1;
+  const p = (node.attrs.padding as number | undefined) ?? 0;
+  const n = Math.min(sampleIndex, x.shape[0] - 1);
+  const selOut = selection.tensorId === outId && selection.index?.length === 4 ? selection.index : [n, 0, 0, 0];
+  const [, o, i, j] = selOut;
+  const cell = Math.min(0.42, (SIZE * 0.9) / Math.max(H, W) / 1.2);
+  const gap = cell * 0.2;
+  const pitch = cell + gap;
+  const planeH = H * pitch;
+  const depth = 0.75;
+  const zIn = (c: number) => -SIZE / 2 + 0.6 + c * depth;
+  const zOut = (k: number) => zIn(C - 1) + 1.6 + k * depth;
+  const active = trace.steps[stepIndex].phase === "forward" && stepIndex >= node.step;
+  // Receptive field rows/cols (clipped to the image; padding cells are outside it).
+  const r0 = Math.max(0, i * s - p);
+  const r1 = Math.min(H - 1, i * s - p + kh - 1);
+  const c0 = Math.max(0, j * s - p);
+  const c1 = Math.min(W - 1, j * s - p + kw - 1);
+  const cx = ((c0 + c1) / 2 - (W - 1) / 2) * pitch;
+  const cy = 0.2 + planeH - ((r0 + r1) / 2 + 0.5) * pitch;
+  const cz = (zIn(0) + zIn(C - 1)) / 2;
+  const outPitch = pitch;
+  const outH = HO * outPitch;
+  const ox = (j - (WO - 1) / 2) * outPitch;
+  const oy = 0.2 + outH - (i + 0.5) * outPitch;
+  return (
+    <group position={[0, -SIZE / 4, 0]}>
+      <gridHelper args={[SIZE, 8, theme.border, theme.border]} />
+      {Array.from({ length: C }, (_, c) => (
+        <CellPlane key={`x${c}`} t={x} step={node.step} z={zIn(c)} cell={cell} gap={gap} active={active} prefix={[n, c]} title={`input channel ${c}${c === 0 ? ` (sample ${n}, ${H}×${W})` : ""}`} />
+      ))}
+      {Array.from({ length: O }, (_, k) => (
+        <CellPlane key={`z${k}`} t={out} step={node.step} z={zOut(k)} cell={cell} gap={gap} active={active && stepIndex === node.step} prefix={[n, k]} title={`output map ${k}${k === o ? " (selected)" : ""}`} />
+      ))}
+      <mesh position={[cx, cy, cz]}>
+        <boxGeometry args={[(c1 - c0 + 1) * pitch, (r1 - r0 + 1) * pitch, zIn(C - 1) - zIn(0) + cell]} />
+        <meshStandardMaterial color={theme.accent} transparent opacity={0.28} depthWrite={false} />
+      </mesh>
+      <Line points={[[cx, cy, zIn(C - 1) + cell / 2], [ox, oy, zOut(o) - cell / 2]]} color={theme.accent} lineWidth={2} dashed dashSize={0.1} gapSize={0.06} />
+      <Label at={[cx, cy + ((r1 - r0 + 1) * pitch) / 2 + 0.25, zIn(0)]}>{`${kh}×${kw}×${C} window for map ${o}, cell (${i}, ${j})`}</Label>
+    </group>
+  );
+}
+
+/**
+ * Attention as a token-by-token grid of bars: height = attention weight for the selected
+ * sample, token labels along both edges, the selected row highlighted.
+ */
+export function AttentionBars() {
+  const { trace, selection, sampleIndex } = useAppState();
+  const dispatch = useDispatch();
+  const theme = useTheme();
+  const node = attentionNode(trace);
+  if (!node) return null;
+  const aId = node.outputs[0];
+  const a = trace.tensor(aId);
+  const [nS, T] = a.shape;
+  const n = Math.min(sampleIndex, nS - 1);
+  const tokens = tokenLabels(trace, n) ?? Array.from({ length: T }, (_, k) => `t${k}`);
+  const pitch = (SIZE * 0.8) / T;
+  const bar = pitch * 0.7;
+  const px = (j: number) => (j - (T - 1) / 2) * pitch;
+  const pz = (i: number) => (i - (T - 1) / 2) * pitch;
+  const selRow = selection.tensorId === aId && selection.index?.[0] === n ? selection.index[1] : null;
+  const hTop = SIZE / 2;
+  return (
+    <group position={[0, -SIZE / 4, 0]}>
+      <Axes x={{ name: "looks at (column)", lo: 0, hi: 1 }} z={{ name: "token (row)", lo: 0, hi: 1 }} y={{ name: "weight", lo: 0, hi: 1 }} colors={theme} ticks={false} />
+      {Array.from({ length: T }, (_, i) =>
+        Array.from({ length: T }, (_, j) => {
+          const v = a.values![(n * T + i) * T + j];
+          const hgt = Math.max(0.01, v * hTop);
+          const hot = selRow === i;
+          return (
+            <mesh
+              key={`${i}-${j}`}
+              position={[px(j), hgt / 2, pz(i)]}
+              onClick={(e) => { e.stopPropagation(); dispatch({ type: "select", selection: { tensorId: aId, index: [n, i, j] } }); }}
+            >
+              <boxGeometry args={[bar, hgt, bar]} />
+              <meshStandardMaterial color={theme.pt0.clone().lerp(theme.pt1, v)} emissive={hot ? theme.accent : new THREE.Color(0)} emissiveIntensity={0.45} transparent opacity={selRow === null || hot ? 1 : 0.35} />
+            </mesh>
+          );
+        }),
+      )}
+      {Array.from({ length: T }, (_, j) => (
+        <Label key={`c${j}`} at={[px(j), 0, SIZE / 2 + 0.3]}>{tokens[j]}</Label>
+      ))}
+      {Array.from({ length: T }, (_, i) => (
+        <Label key={`r${i}`} at={[-SIZE / 2 - 0.35, 0, pz(i)]} muted={selRow !== null && selRow !== i} onClick={() => dispatch({ type: "select", selection: { tensorId: aId, index: [n, i, 0] } })}>{tokens[i]}</Label>
+      ))}
+      {selRow !== null &&
+        Array.from({ length: T }, (_, j) => {
+          const v = a.values![(n * T + selRow) * T + j];
+          return <Label key={`v${j}`} at={[px(j), v * hTop + 0.2, pz(selRow)]}><span className="nvz-3d-value">{fmt(v)}</span></Label>;
+        })}
+    </group>
+  );
+}
+
 /** Scenes available for a trace, in preference order for the current step. */
 export function availableScenes(trace: ReturnType<typeof useAppState>["trace"], stepIndex: number): SceneDef[] {
   const out: SceneDef[] = [];
@@ -525,12 +672,26 @@ export function availableScenes(trace: ReturnType<typeof useAppState>["trace"], 
   if (trace.raw.model.family === "tree" && treeAt(trace, trace.steps.length - 1)) {
     out.push({ id: "regions", title: "Leaf regions", camera: orbitPosition(50, 40, 1), render: () => <RegionsScene /> });
   }
+  if (trace.raw.model.family === "cnn" && trace.raw.nodes.some((n) => n.op === "conv2d")) {
+    out.push({ id: "conv", title: "Convolution", camera: orbitPosition(22, -38, 1), render: () => <ConvStack /> });
+  }
+  if (trace.raw.model.family === "transformer" && attentionNode(trace)) {
+    out.push({ id: "attention", title: "Attention", camera: orbitPosition(38, 30, 1), render: () => <AttentionBars /> });
+  }
   out.push({ id: "tensors", title: "Tensor stack", camera: DEFAULT_CAMERA, render: () => <TensorStack /> });
+  // Model scenes lead, except when the current step has nothing to show in them.
+  if (trace.raw.model.family === "cnn" && !cnnNode(trace, stepIndex) && out[0]?.id === "conv") out.push(out.shift()!);
   return out;
 }
 
 /** The honest mapping caption for a scene. */
 export function sceneCaption(id: SceneId, trace: ReturnType<typeof useAppState>["trace"]): string {
+  if (id === "conv") {
+    return "Front planes: the input image's channels (one plane per channel, cell colour = pixel value on the diverging scale). Back planes: the four output feature maps. The translucent box is the 3×3×3 receptive-field volume (3 rows × 3 columns on every channel; padding cells lie outside the image) whose 27 products plus the bias give the selected output cell, joined to it by the dashed line. Click an output cell to move the box.";
+  }
+  if (id === "attention") {
+    return "One bar per (row token, column token) pair for the selected sample: height = the attention weight the row token gives the column token (0 to 1, each row sums to 1; colour darkens with the weight). Row labels on the left edge, column labels on the front edge, position-numbered so repeated tokens stay apart. Click a bar or a row label to highlight that row and show its weights.";
+  }
   if (id === "regions") {
     return "One box per leaf region (dashed-looking, faded boxes: nodes created but not split yet). Footprint = the region's bounds in feature space (the data range plus 0.5 on each side), height = predicted probability of class 1 at that node = count₁ / n, colour: class-0 hue at 0 to class-1 hue at 1. Floor dots: the dataset (colour = label). Highlighted box: the node being split (train) or the node the current sample is in (predict).";
   }

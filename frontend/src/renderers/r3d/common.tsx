@@ -119,18 +119,22 @@ export function Label({ at, children, muted, onClick, title }: {
  * z along the right floor edge, y up the back-left corner. Ticks are "nice" values inside
  * each range; titles sit just outside the edge, never in mid-air.
  */
-export function Axes({ x, z, y, colors }: {
+export function Axes({ x, z, y, colors, yHeight = SIZE / 2, ticks: showTicks = true }: {
   x: { name: string; lo: number; hi: number };
   z: { name: string; lo: number; hi: number };
   y: { name: string; lo: number; hi: number };
   colors: { border: THREE.Color; muted: THREE.Color };
+  /** Scene height that y.hi maps to (default half the cube). */
+  yHeight?: number;
+  /** Draw tick marks and tick labels (off for categorical axes). */
+  ticks?: boolean;
 }) {
   const h = SIZE / 2;
   const eps = 1e-9;
-  const inside = (a: { lo: number; hi: number }, n: number) => ticks(a.lo, a.hi, n).filter((v) => v >= a.lo - eps && v <= a.hi + eps);
+  const inside = (a: { lo: number; hi: number }, n: number) => (showTicks ? ticks(a.lo, a.hi, n).filter((v) => v >= a.lo - eps && v <= a.hi + eps) : []);
   const sx = span(x.lo, x.hi);
   const sz = span(z.lo, z.hi);
-  const sy = (v: number) => ((v - y.lo) / (y.hi - y.lo || 1)) * h;
+  const sy = (v: number) => ((v - y.lo) / (y.hi - y.lo || 1)) * yHeight;
   const tick = 0.12;
   const c = colors.border;
   return (
@@ -138,7 +142,7 @@ export function Axes({ x, z, y, colors }: {
       <gridHelper args={[SIZE, 8, c, c]} position={[0, 0, 0]} />
       <Line points={[[-h, 0, h], [h, 0, h]]} color={c} lineWidth={1.5} />
       <Line points={[[h, 0, -h], [h, 0, h]]} color={c} lineWidth={1.5} />
-      <Line points={[[-h, 0, -h], [-h, h, -h]]} color={c} lineWidth={1.5} />
+      <Line points={[[-h, 0, -h], [-h, yHeight, -h]]} color={c} lineWidth={1.5} />
       {inside(x, 4).map((v) => (
         <group key={`x${v}`}>
           <Line points={[[sx(v), 0, h], [sx(v), 0, h + tick]]} color={c} lineWidth={1} />
@@ -159,7 +163,7 @@ export function Axes({ x, z, y, colors }: {
           <Label at={[-h - 0.45, sy(v), -h]} muted>{fmt(v)}</Label>
         </group>
       ))}
-      <Label at={[-h - 0.45, h + 0.3, -h]}>{y.name}</Label>
+      <Label at={[-h - 0.45, yHeight + 0.3, -h]}>{y.name}</Label>
     </group>
   );
 }

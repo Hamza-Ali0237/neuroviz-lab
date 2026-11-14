@@ -3,8 +3,12 @@ import { fmt, signed, ticks } from "../../format";
 import type { Tensor } from "../../trace/load";
 
 export const W = 420;
-export const H = 300;
+/** SVG viewBox height; vertical capture pages set a taller one before the first render. */
+export let H = 300;
 export const PAD = 40;
+export function setSceneHeight(h: number): void {
+  H = h;
+}
 
 /** Class marker: circle for class 0, diamond for class 1, so classes differ by shape too. */
 export function Marker({ cls, cx, cy, r, className, onClick, children }: {
