@@ -111,6 +111,30 @@ Small, focused commits with conventional prefixes and a scope:
 `feat(ops): ...`, `feat(models): ...`, `fix(core): ...`, `test(ops): ...`,
 `docs: ...`, `chore(viewer): ...`. The subject says what changed, in the imperative.
 
+## Releasing
+
+Releases are published to PyPI by `.github/workflows/release.yml` when a tag `v*` is pushed.
+It uses PyPI trusted publishing, so there is no API token to store.
+
+One-time setup (maintainer):
+
+1. On PyPI, open *Your account → Publishing* and add a pending publisher for the project
+   `neuroviz-lab`: owner `hamzaali`, repository `neuroviz-lab`, workflow `release.yml`,
+   environment `pypi`. After the first release it becomes a regular trusted publisher.
+2. On GitHub, *Settings → Environments → New environment* named `pypi`. Optionally require a
+   reviewer there so every publish needs a click.
+
+Each release:
+
+```bash
+# 1. CHANGELOG.md: set the date of the version section; pyproject.toml: bump `version`
+# 2. commit on main, wait for CI to pass
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+# 3. when the workflow is green, create the GitHub release for the tag and paste the
+#    CHANGELOG section as its notes
+```
+
 ## Ground rules
 
 - Real values only. The viewer never shows a number the engine did not compute; a

@@ -54,18 +54,26 @@ Also in v1:
   read without Python.
 - `trace.save("run.html")` writes one self-contained page; `nvzlab demo <model>` does it
   from the terminal.
+- Scenes that move with the numbers: the logistic-regression decision boundary or sigmoid
+  curve plus its loss landscape in 3D, the MLP network diagram with activations, weights
+  and gradients and its decision regions, and the decision tree's partition of the plane
+  with every candidate split.
+- Capture mode for screen recording (`capture="square"` or `"vertical"`): controls hidden,
+  a fixed 1080×1080 or 1080×1920 viewport, larger type, looping auto-play.
 - Every op carries a plain-language explanation and a formula for both directions, and
   errors say what was expected, what was received and how to fix it.
 
 ## What's not yet
 
+- No dedicated scenes for `cnn` and `transformer` yet: they show the step list, the
+  tensors as tinted matrices (the attention weights included) and the op cards, but no
+  image view and no attention heat-map picture.
 - No worked-arithmetic cards for `conv2d`, `maxpool2d`, `layernorm` or attention in the
   viewer: those ops show their formula, shapes and values, not a per-cell derivation.
-- No image or heat-map views: 4-D tensors render as flattened grids.
+- 4-D tensors render as flattened grids.
 - Multi-head attention (`heads=2`) is not built in.
 - No PyTorch, TensorFlow or JAX adapters, no uploading your own data, no editing the
   built-in datasets.
-- Capture mode (controls hidden, fixed sizes for recording) is in progress.
 
 ## What's next
 

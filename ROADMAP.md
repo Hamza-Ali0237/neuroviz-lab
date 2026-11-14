@@ -12,8 +12,8 @@ with semantic versions and human-readable notes in `CHANGELOG.md`.
 - Five built-in models: `logistic_regression`, `mlp`, `decision_tree`, `cnn`,
   `transformer`, each with fixed weights, a synthetic dataset and a demo scene.
 - Predict and train traces (1 to 3 iterations), 2D and 3D renderers sharing one state.
-- Capture mode: controls hidden, square (1080×1080) and vertical (1080×1920) sizes, larger
-  type, clean looping playback, available from Python and from a URL flag.
+- Dedicated scenes for `cnn` (the image, each filter and the pooled map) and `transformer`
+  (an attention heat map per head).
 - Worked-arithmetic cards for the remaining ops (`conv2d`, `maxpool2d`, `layernorm`,
   attention), so every selected cell can show the multiply-and-sum behind it.
 - Image and heat-map views for 4-D tensors and attention weights.
