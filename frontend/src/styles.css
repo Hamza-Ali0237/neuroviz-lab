@@ -252,3 +252,21 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-capture .nvz-3d-value { font-size: 22px; }
 .nvz-capture .nvz-tick { font-size: 11px; }
 .nvz-capture .nvz-axis-label { font-size: 13px; }
+
+/* MLP scene */
+.nvz-mlp-scene { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.nvz-plot-first .nvz-flow > .nvz-mlp-scene { max-width: 1100px; }
+.nvz-side .nvz-mlp-scene { grid-template-columns: 1fr; }
+.nvz-edge { cursor: pointer; transition: stroke-width 200ms ease, stroke-opacity 200ms ease; }
+.nvz-edge.selected { stroke: var(--fg); }
+.nvz-neuron circle { stroke: var(--border); stroke-width: 1.5; transition: fill 200ms ease; }
+.nvz-neuron.lit circle { stroke: var(--fg); cursor: pointer; }
+.nvz-neuron.selected circle { stroke: var(--sel); stroke-width: 4; }
+.nvz-neuron-value { font-family: var(--mono); font-size: 9px; fill: var(--fg); pointer-events: none; }
+.nvz-neuron:not(.lit) .nvz-neuron-value { fill: var(--muted); }
+.nvz-scene-legend i.nvz-edge-pos { width: 18px; height: 0; border-top: 3px solid rgb(37, 99, 235); border-radius: 0; }
+.nvz-scene-legend i.nvz-edge-neg { width: 18px; height: 0; border-top: 3px solid rgb(234, 88, 12); border-radius: 0; }
+.nvz-scene-legend i.nvz-neuron-dim { background: var(--panel); border: 1.5px solid var(--border); }
+.nvz-capture .nvz-mlp-scene { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; align-items: stretch; }
+.nvz-capture-vertical .nvz-mlp-scene { grid-template-columns: 1fr; }
+.nvz-capture .nvz-neuron-value { font-size: 8px; }

@@ -5,6 +5,8 @@ import { unflatIndex } from "../../trace/load";
 import { MatrixView } from "./MatrixView";
 import { OpCard } from "./OpCard";
 import { LRScene } from "./LRScene";
+import { MLPScene } from "./MLPScene";
+import { mlpView } from "../mlp";
 import { worked } from "./worked";
 
 /** Worked computation for the selected (or first) output cell of a node. */
@@ -160,7 +162,15 @@ function EventView({ e }: { e: EventRecord }) {
 function ModelScene() {
   const { trace } = useAppState();
   if (trace.raw.model.family === "linear" && [1, 2].includes(trace.raw.mode.n_features)) return <LRScene />;
+  if (trace.raw.model.family === "mlp") return <MLPScene />;
   return null;
+}
+
+/** Whether the trace has a model-specific 2D scene. */
+export function hasModelScene(trace: ReturnType<typeof useAppState>["trace"]): boolean {
+  if (trace.raw.model.family === "linear") return [1, 2].includes(trace.raw.mode.n_features);
+  if (trace.raw.model.family === "mlp") return mlpView(trace, 0, 0) !== null;
+  return false;
 }
 
 export function Scene2D() {
@@ -168,7 +178,7 @@ export function Scene2D() {
   const step = trace.steps[stepIndex];
   const nodes = trace.nodesInStep(stepIndex);
   const events = trace.eventsInStep(stepIndex);
-  const hasScene = trace.raw.model.family === "linear" && [1, 2].includes(trace.raw.mode.n_features);
+  const hasScene = hasModelScene(trace);
   if (capture) {
     // Capture mode: the scene alone, large; the flow of ops only when the model has no scene.
     return (

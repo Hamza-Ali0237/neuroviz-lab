@@ -158,3 +158,41 @@ def test_moons_is_not_linearly_separable_and_read_only():
     with pytest.raises(ValueError):
         ds.X[0, 0] = 0.0
     np.testing.assert_array_equal(nvz.datasets.load("moons").X, ds.X)
+
+
+def test_prob_grid_matches_trace_predictions_at_three_points():
+    for kind in ("predict", "train"):
+        tr = nvz.trace("mlp", kind=kind, samples="batch", iterations=2)
+        ctx = {t.name: t.array for t in tr.tensors.values() if t.role == "context"}
+        n_grids = 1 if kind == "predict" else 3  # before training, after update 1, after update 2
+        assert [f"prob_grid_{k}" in ctx for k in range(n_grids)] == [True] * n_grids
+        assert f"prob_grid_{n_grids}" not in ctx
+        assert ctx["prob_grid_0"].shape == (41, 41)
+        g1, g2 = ctx["prob_grid_x1"], ctx["prob_grid_x2"]
+        ds = nvz.models.load("mlp").dataset
+        np.testing.assert_allclose(
+            [g1[0], g1[-1]],
+            ds.X[:, 0].min() - 0.5 + [0, 0] + [0, ds.X[:, 0].max() - ds.X[:, 0].min() + 1.0],
+        )
+        for k in range(n_grids):
+            # the params of grid k: the first-seen params (k = 0) or the `after` of update k
+            if k == 0:
+                params: dict = {}
+                for t in tr.tensors.values():
+                    if t.role == "param":
+                        params.setdefault(t.name, t.array)
+            else:
+                ups = [e for e in tr.events if e.kind == "sgd_update"]
+                params = {
+                    e.payload["param"]: tr.tensors[e.payload["after"]].array
+                    for e in ups[(k - 1) * 4 : k * 4]
+                }
+            assert set(params) == {"W1", "b1", "W2", "b2"}
+            for i, j in [(0, 0), (20, 20), (40, 7)]:
+                pt = np.array([[g1[i], g2[j]]])
+                direct = nvz.trace("mlp", pt, params=params).tensors
+                prob = next(t.array for t in direct.values() if t.role == "output")
+                assert ctx[f"prob_grid_{k}"][i, j] == pytest.approx(float(prob[0, 1]), rel=1e-9)
+        assert "moons data range plus 0.5" in next(
+            t.note for t in tr.tensors.values() if t.name == "prob_grid_0"
+        )

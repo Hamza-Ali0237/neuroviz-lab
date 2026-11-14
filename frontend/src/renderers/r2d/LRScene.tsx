@@ -2,9 +2,9 @@ import { useAppState, useDispatch } from "../../state/store";
 import { fmt, signed, ticks } from "../../format";
 import type { Tensor } from "../../trace/load";
 
-const W = 420;
-const H = 300;
-const PAD = 40;
+export const W = 420;
+export const H = 300;
+export const PAD = 40;
 
 /** Class marker: circle for class 0, diamond for class 1, so classes differ by shape too. */
 export function Marker({ cls, cx, cy, r, className, onClick, children }: {
@@ -31,7 +31,7 @@ export function Marker({ cls, cx, cy, r, className, onClick, children }: {
   );
 }
 
-function Axes({ sx, sy, xlo, xhi, ylo, yhi, xname, yname, yTicks }: {
+export function Axes({ sx, sy, xlo, xhi, ylo, yhi, xname, yname, yTicks }: {
   sx: (v: number) => number;
   sy: (v: number) => number;
   xlo: number;
@@ -215,12 +215,13 @@ export function LRScene() {
   );
 }
 
-export function SceneLegend({ classes, labelled, prev, pred, context }: {
+export function SceneLegend({ classes, labelled, prev, pred, context, line = true }: {
   classes: string[];
   labelled: boolean;
   prev: boolean;
   pred?: boolean;
   context?: boolean;
+  line?: boolean;
 }) {
   return (
     <ul className="nvz-scene-legend">
@@ -234,7 +235,7 @@ export function SceneLegend({ classes, labelled, prev, pred, context }: {
       )}
       {pred && <li><i className="nvz-pt-pred" /> predicted p</li>}
       {context && <li><i className="nvz-pt-ctx" /> whole dataset (faded)</li>}
-      <li><i className="nvz-line" /> current parameters</li>
+      {line && <li><i className="nvz-line" /> current parameters</li>}
       {prev && <li><i className="nvz-line prev" /> before this update</li>}
     </ul>
   );

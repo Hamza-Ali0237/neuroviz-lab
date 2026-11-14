@@ -4,9 +4,11 @@ import { Line } from "@react-three/drei";
 import { useAppState, useDispatch } from "../../state/store";
 import { fmt } from "../../format";
 import { flatIndex, unflatIndex } from "../../trace/load";
+import { mlpView, probGridAt } from "../mlp";
+import { NEG_RGB, POS_RGB } from "../../format";
 import { Axes, Label, SIZE, Surface, bilinear, cellColor, orbitPosition, span, useTheme } from "./common";
 
-export type SceneId = "probability" | "loss" | "tensors";
+export type SceneId = "probability" | "loss" | "tensors" | "network" | "surface" | "regions";
 
 export interface SceneDef {
   id: SceneId;
@@ -21,55 +23,84 @@ export const DEFAULT_CAMERA = orbitPosition(35, 45, 1);
 
 const GRID = 41;
 
-/** LR with 2 features: p(x1, x2) from the parameters current at this step. Height = probability. */
+/**
+ * p(x1, x2) as a height field. Logistic regression: computed from the parameters current
+ * at this step. MLP: the recorded probability grid current at this step (prob_grid_k).
+ * Height = probability; traced samples as spheres at their predicted height.
+ */
 export function ProbabilitySurface() {
   const { trace, stepIndex, sampleIndex, selection } = useAppState();
   const dispatch = useDispatch();
   const theme = useTheme();
   const x = trace.byRole("input", "x")!;
   const y = trace.byRole("label");
-  const w = trace.paramsAt(stepIndex).get("w")!;
-  const b = trace.paramsAt(stepIndex).get("b")!;
   const ctxX = trace.context("dataset_X");
   const ctxY = trace.context("dataset_y");
   const n = trace.raw.mode.n_samples;
   const names = trace.raw.dataset?.features ?? ["x1", "x2"];
+  const linear = trace.raw.model.family === "linear";
+  const params = trace.paramsAt(stepIndex);
+  const w = params.get("w");
+  const b = params.get("b");
+  const view = linear ? null : mlpView(trace, stepIndex, sampleIndex);
+  const g = linear ? null : probGridAt(trace, view?.reached ?? 0);
+  // Axes: LR spans the data range; the MLP grid has its own axes.
   const all = [...x.values!, ...(ctxX?.values ?? [])];
   const lo = Math.floor(Math.min(-2.5, ...all) - 0.5);
   const hi = Math.ceil(Math.max(2.5, ...all) + 0.5);
-  const sx = span(lo, hi);
+  const [lo1, hi1, lo2, hi2] = g ? [g.ax1[0], g.ax1[g.ax1.length - 1], g.ax2[0], g.ax2[g.ax2.length - 1]] : [lo, hi, lo, hi];
+  const s1 = span(lo1, hi1);
+  const s2 = span(lo2, hi2);
   const sy = (p: number) => p * (SIZE / 2);
-  const [w1, w2] = w.values!;
-  const b0 = b.values![0];
-  const p = (x1: number, x2: number) => 1 / (1 + Math.exp(-(w1 * x1 + w2 * x2 + b0)));
-  const axis = useMemo(() => Array.from({ length: GRID }, (_, k) => lo + ((hi - lo) * k) / (GRID - 1)), [lo, hi]);
-  const scene = useMemo(() => axis.map(sx), [axis, sx]);
-  const heights = useMemo(() => (i: number, j: number) => sy(p(axis[i], axis[j])), [axis, w1, w2, b0]); // eslint-disable-line react-hooks/exhaustive-deps
-  const color = useMemo(
-    () => (i: number, j: number) => theme.pt0.clone().lerp(theme.pt1, p(axis[i], axis[j])).lerp(theme.panel, 0.35),
-    [axis, w1, w2, b0, theme], // eslint-disable-line react-hooks/exhaustive-deps
+  const [w1, w2] = w?.values ?? [0, 0];
+  const b0 = b?.values?.[0] ?? 0;
+  const pLR = (x1: number, x2: number) => 1 / (1 + Math.exp(-(w1 * x1 + w2 * x2 + b0)));
+  const ax1 = useMemo(() => (g ? Array.from(g.ax1) : Array.from({ length: GRID }, (_, k) => lo + ((hi - lo) * k) / (GRID - 1))), [g?.ax1, lo, hi]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ax2 = useMemo(() => (g ? Array.from(g.ax2) : ax1), [g?.ax2, ax1]); // eslint-disable-line react-hooks/exhaustive-deps
+  const gridId = g?.grid.id ?? "";
+  const pAt = useMemo(
+    () => (i: number, j: number) => (g ? g.grid.values![i * ax2.length + j] : pLR(ax1[i], ax2[j])),
+    [gridId, ax1, ax2, w1, w2, b0], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  // Decision line w1·x1 + w2·x2 + b = 0 at height p = 0.5, clipped to the data range.
+  const xs = useMemo(() => ax1.map(s1), [ax1, s1]);
+  const zs = useMemo(() => ax2.map(s2), [ax2, s2]);
+  const heights = useMemo(() => (i: number, j: number) => sy(pAt(i, j)), [pAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const color = useMemo(() => (i: number, j: number) => theme.pt0.clone().lerp(theme.pt1, pAt(i, j)).lerp(theme.panel, 0.35), [pAt, theme]);
+  // Decision line w1·x1 + w2·x2 + b = 0 at height p = 0.5, clipped to the data range (LR only).
   const line = useMemo(() => {
     const pts: [number, number][] = [];
+    if (!linear) return pts;
     const push = (x1: number, x2: number) => x1 >= lo && x1 <= hi && x2 >= lo && x2 <= hi && pts.push([x1, x2]);
     if (Math.abs(w2) > 1e-9) for (const x1 of [lo, hi]) push(x1, -(w1 * x1 + b0) / w2);
     if (Math.abs(w1) > 1e-9) for (const x2 of [lo, hi]) push(-(w2 * x2 + b0) / w1, x2);
     return pts.slice(0, 2);
-  }, [w1, w2, b0, lo, hi]);
+  }, [linear, w1, w2, b0, lo, hi]);
+  // Sample heights: LR exact from the parameters; MLP exact from the softmax output of the
+  // iteration that used these parameters, else interpolated from the grid (flagged).
+  const softmax = linear
+    ? null
+    : trace.raw.nodes.find((nd) => nd.op === "softmax" && nd.phase === "forward" && trace.steps[nd.step].iteration === (view?.reached ?? 0));
+  const probs = softmax ? trace.tensor(softmax.outputs[0]).values : null;
+  const sampleP = (i: number): [number, boolean] => {
+    const x1 = x.values![i * 2];
+    const x2 = x.values![i * 2 + 1];
+    if (linear) return [pLR(x1, x2), false];
+    if (probs) return [probs[i * 2 + 1], false];
+    return [bilinear(g!.grid.values!, g!.ax1, g!.ax2, x1, x2) ?? 0, true];
+  };
   const selRow = selection.tensorId === x.id && selection.index ? selection.index[0] : -1;
   const cls = (l: number | null | undefined) => (l === null || l === undefined ? theme.muted : l > 0.5 ? theme.pt1 : theme.pt0);
   return (
     <group position={[0, -SIZE / 4, 0]}>
-      <Axes x={{ name: names[0], lo, hi }} z={{ name: names[1], lo, hi }} y={{ name: "p", lo: 0, hi: 1 }} colors={theme} />
-      <Surface xs={scene} zs={scene} heights={heights} color={color} opacity={0.8} />
+      <Axes x={{ name: names[0], lo: lo1, hi: hi1 }} z={{ name: names[1], lo: lo2, hi: hi2 }} y={{ name: "p", lo: 0, hi: 1 }} colors={theme} />
+      <Surface xs={xs} zs={zs} heights={heights} color={color} opacity={0.8} />
       {line.length === 2 && (
-        <Line points={line.map(([x1, x2]) => [sx(x1), sy(0.5) + 0.01, sx(x2)] as [number, number, number])} color={theme.fg} lineWidth={2} />
+        <Line points={line.map(([x1, x2]) => [s1(x1), sy(0.5) + 0.01, s2(x2)] as [number, number, number])} color={theme.fg} lineWidth={2} />
       )}
       {ctxX?.values &&
         ctxX.shape[1] === 2 &&
         Array.from({ length: ctxX.shape[0] }, (_, k) => (
-          <mesh key={k} position={[sx(ctxX.values![k * 2]), 0.03, sx(ctxX.values![k * 2 + 1])]}>
+          <mesh key={k} position={[s1(ctxX.values![k * 2]), 0.03, s2(ctxX.values![k * 2 + 1])]}>
             <sphereGeometry args={[0.035, 8, 8]} />
             <meshStandardMaterial color={cls(ctxY?.values?.[k])} transparent opacity={0.35} />
           </mesh>
@@ -77,17 +108,17 @@ export function ProbabilitySurface() {
       {Array.from({ length: n }, (_, i) => {
         const x1 = x.values![i * 2];
         const x2 = x.values![i * 2 + 1];
-        const pi = p(x1, x2);
+        const [pi, approx] = sampleP(i);
         const current = i === sampleIndex;
         return (
           <group key={i}>
-            <mesh position={[sx(x1), 0.02, sx(x2)]}>
+            <mesh position={[s1(x1), 0.02, s2(x2)]}>
               <sphereGeometry args={[0.06, 10, 10]} />
               <meshStandardMaterial color={cls(y?.values?.[i])} transparent opacity={0.45} />
             </mesh>
-            <Line points={[[sx(x1), 0, sx(x2)], [sx(x1), sy(pi), sx(x2)]]} color={theme.muted} lineWidth={1} dashed dashSize={0.08} gapSize={0.06} />
+            <Line points={[[s1(x1), 0, s2(x2)], [s1(x1), sy(pi), s2(x2)]]} color={theme.muted} lineWidth={1} dashed dashSize={0.08} gapSize={0.06} />
             <mesh
-              position={[sx(x1), sy(pi), sx(x2)]}
+              position={[s1(x1), sy(pi), s2(x2)]}
               onClick={(e) => {
                 e.stopPropagation();
                 dispatch({ type: "sample", index: i });
@@ -97,10 +128,101 @@ export function ProbabilitySurface() {
               <sphereGeometry args={[current ? 0.11 : 0.08, 16, 16]} />
               <meshStandardMaterial color={cls(y?.values?.[i])} emissive={i === selRow ? theme.sel : current ? theme.fg : new THREE.Color(0)} emissiveIntensity={0.5} />
             </mesh>
-            {current && <Label at={[sx(x1), sy(pi) + 0.25, sx(x2)]}>{`sample ${i}: p = ${fmt(pi)}`}</Label>}
+            {current && <Label at={[s1(x1), sy(pi) + 0.25, s2(x2)]}>{`sample ${i}: p ${approx ? "≈" : "="} ${fmt(pi)}${approx ? " (from grid)" : ""}`}</Label>}
           </group>
         );
       })}
+    </group>
+  );
+}
+
+/**
+ * MLP network in space: layers as rows of spheres (colour = activation for the selected
+ * sample, dim until the layer's step is reached), connections as lines coloured by weight
+ * sign and thickened by magnitude (gradients on backward steps).
+ */
+export function NetworkScene() {
+  const { trace, stepIndex, sampleIndex, selection } = useAppState();
+  const dispatch = useDispatch();
+  const theme = useTheme();
+  const view = mlpView(trace, stepIndex, sampleIndex);
+  if (!view) return null;
+  const { layers, edges } = view;
+  const lx = (l: number) => (l - (layers.length - 1) / 2) * 1.7;
+  const nz = (size: number, j: number) => (j - (size - 1) / 2) * 0.8;
+  const ny = 0.9;
+  const pos = (l: number, j: number): [number, number, number] => [lx(l), ny, nz(layers[l].size, j)];
+  const pos3 = (c: [number, number, number]) => new THREE.Color(c[0] / 255, c[1] / 255, c[2] / 255);
+  return (
+    <group position={[0, -SIZE / 4, 0]}>
+      <gridHelper args={[SIZE, 8, theme.border, theme.border]} />
+      {edges.map((e, l) => {
+        const t = e.tensor;
+        const [nIn, nOut] = t.shape;
+        const absMax = Math.max(Math.abs(t.stats.min), Math.abs(t.stats.max), 1e-12);
+        const lines: JSX.Element[] = [];
+        for (let i = 0; i < nIn; i++) {
+          for (let j = 0; j < nOut; j++) {
+            const v = t.values![i * nOut + j];
+            const a = Math.abs(v) / absMax;
+            lines.push(
+              <Line
+                key={`${l}-${i}-${j}`}
+                points={[pos(l, i), pos(l + 1, j)]}
+                color={pos3(v >= 0 ? POS_RGB : NEG_RGB)}
+                lineWidth={0.5 + 4 * a}
+                transparent
+                opacity={0.3 + 0.7 * a}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  dispatch({ type: "select", selection: { tensorId: t.id, index: [i, j] } });
+                }}
+              />,
+            );
+          }
+        }
+        return (
+          <group key={l}>
+            {lines}
+            <Label at={[(lx(l) + lx(l + 1)) / 2, ny + 1.2, 0]} muted>{`${e.grad ? "∂L/∂" : ""}${e.name} (${t.shape.join("×")})`}</Label>
+          </group>
+        );
+      })}
+      {layers.map((layer, l) =>
+        Array.from({ length: layer.size }, (_, j) => {
+          const v = layer.values?.[j] ?? null;
+          const lit = v !== null;
+          const sel = selection.tensorId === layer.tensorId && selection.index?.[0] === sampleIndex && selection.index?.[1] === j;
+          return (
+            <group key={`${l}-${j}`}>
+              <mesh
+                position={pos(l, j)}
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  if (layer.tensorId) dispatch({ type: "select", selection: { tensorId: layer.tensorId, index: [sampleIndex, j] } });
+                }}
+              >
+                <sphereGeometry args={[0.2, 20, 20]} />
+                <meshStandardMaterial
+                  color={lit ? cellColor(v!, layer.absMax, theme.panel) : theme.panel}
+                  transparent={!lit}
+                  opacity={lit ? 1 : 0.35}
+                  emissive={sel ? theme.sel : new THREE.Color(0)}
+                  emissiveIntensity={0.7}
+                />
+              </mesh>
+              {lit && (
+                <Label at={[lx(l), ny - 0.42, nz(layer.size, j)]} title={layer.tensorId ? `${trace.label(layer.tensorId)}[${sampleIndex}, ${j}] = ${v}` : undefined}>
+                  <span className="nvz-3d-value">{fmt(v!)}</span>
+                </Label>
+              )}
+            </group>
+          );
+        }),
+      )}
+      {layers.map((layer, l) => (
+        <Label key={l} at={[lx(l), 0, SIZE / 2 + 0.3]}>{layer.label}</Label>
+      ))}
     </group>
   );
 }
@@ -315,12 +437,23 @@ export function availableScenes(trace: ReturnType<typeof useAppState>["trace"], 
   } else if (linear && nf === 1 && hasLoss) {
     out.push(loss);
   }
+  if (trace.raw.model.family === "mlp" && mlpView(trace, 0, 0)) {
+    out.push({ id: "network", title: "Network", camera: orbitPosition(28, 20, 1), render: () => <NetworkScene /> });
+    if (probGridAt(trace, 0)) out.push({ id: "surface", title: "Probability surface", camera: DEFAULT_CAMERA, render: () => <ProbabilitySurface /> });
+  }
   out.push({ id: "tensors", title: "Tensor stack", camera: DEFAULT_CAMERA, render: () => <TensorStack /> });
   return out;
 }
 
 /** The honest mapping caption for a scene. */
 export function sceneCaption(id: SceneId, trace: ReturnType<typeof useAppState>["trace"]): string {
+  if (id === "network") {
+    return "Spheres = neurons, one row per layer (input, hidden, output), colour = the value for the selected sample on the diverging scale (blue positive, orange negative, per layer); dim spheres are layers not computed yet at this step. Lines = weights: blue positive, orange negative, thickness and opacity ∝ |weight|; on backward steps they show ∂L/∂W instead once computed. Click a sphere or a line to select the value.";
+  }
+  if (id === "surface") {
+    const note = trace.context("prob_grid_0")?.note ?? "";
+    return `Height and colour = probability of class 1 from the recorded grid current at this step (class-0 hue at 0, class-1 hue at 1). Position = the two input features. Spheres: traced samples at their predicted probability (exact softmax output when this step's forward pass has run; otherwise interpolated from the grid and marked ≈). Faded floor dots: the whole dataset. ${note}`;
+  }
   if (id === "probability") {
     return "Height = predicted probability p(x₁, x₂) from this step's parameters. Colour: class-0 hue at p = 0 to class-1 hue at p = 1. Position = the two input features. Spheres: traced samples at their predicted height (colour = label); the black line on the surface is p = 0.5. Faded floor dots: the whole dataset.";
   }
