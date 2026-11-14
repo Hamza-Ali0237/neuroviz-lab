@@ -38,6 +38,8 @@ class Model:
     initial_params: dict[str, np.ndarray] | None = None
     dataset: Dataset | None = None
     loss: str | None = None
+    #: Learning rate used by train traces when the caller passes none.
+    default_lr: float = 0.1
 
     def forward(self, x: np.ndarray, params: dict[str, np.ndarray]) -> np.ndarray:
         raise NotImplementedError
@@ -47,6 +49,18 @@ class Model:
     ) -> None:
         """Hook called once per trace, before the forward pass, to record ``nvz.context``
         tensors (e.g. the whole dataset, a loss surface). Default: nothing."""
+
+    def record_path(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        path: list[dict[str, np.ndarray]],
+        losses: list[float],
+    ) -> None:
+        """Hook called once at the end of a gradient train trace with the visited parameter
+        sets (initial first, then after each update) and the exact loss at each, to record
+        ``nvz.context`` tensors that depend on the path (e.g. a loss landscape window).
+        Default: nothing."""
 
     def __call__(self, x: np.ndarray, params: dict[str, np.ndarray] | None = None) -> np.ndarray:
         return self.forward(x, self.params if params is None else params)

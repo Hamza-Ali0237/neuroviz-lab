@@ -32,7 +32,7 @@ def trace(
     samples: str | None = None,
     features: int | None = None,
     loss: str | Callable[..., np.ndarray] | None = None,
-    lr: float = 0.1,
+    lr: float | None = None,
     iterations: int = 1,
     dim: str = "2d",
     name: str | None = None,
@@ -43,8 +43,9 @@ def trace(
     ``model`` is a built-in name, a function ``f(x, params)`` built from ``nvz.ops``, or a
     ``nvz.Model`` instance. With a built-in name, ``x``/``y`` default to a sample from the
     model's dataset. ``kind="train"`` records forward, loss, backward and one SGD update per
-    iteration (at most 3). User ``params`` are never modified. ``name`` overrides the display
-    name (default: the built-in name, the function's ``__name__`` or the class name).
+    iteration (at most 3); ``lr`` defaults to the model's ``default_lr`` (0.1 for functions).
+    User ``params`` are never modified. ``name`` overrides the display name (default: the
+    built-in name, the function's ``__name__`` or the class name).
 
     Examples
     --------
@@ -90,6 +91,8 @@ def trace(
             )
         if loss is None:
             loss = model.loss
+        if lr is None:
+            lr = model.default_lr
         dataset = model.dataset
         if x is None and dataset is not None:
             if self_trained:
@@ -118,6 +121,8 @@ def trace(
             f"{name}: x is required for a user model. "
             "Fix: pass x, e.g. nvz.trace(model, x, params=p)."
         )
+    if lr is None:
+        lr = 0.1
 
     x = np.asarray(x, dtype=np.float64)
     n = int(x.shape[0]) if x.ndim >= 2 else 1
@@ -169,6 +174,8 @@ def trace(
             tape.phase = "update"
             for it in model.train(x, y, iterations):
                 tape.iteration = it
+        path = [params]  # the parameter sets visited: initial, then after each update
+        loss_ids: list[str] = []
         for it in range(0 if self_trained else iterations if kind == "train" else 1):
             tape.iteration = it
             tape.phase = "forward"
@@ -195,8 +202,28 @@ def trace(
                 )
             tape.tensors[loss_id].role = "loss"
             tape.tensors[loss_id].name = "loss"
+            loss_ids.append(loss_id)
             grads = tape.backward(loss_val)
             params = tape.sgd_update(params, grads, lr)
+            path.append(params)
+
+    if loss_ids:
+        # Exact loss at every visited parameter set. The first ones are the recorded loss
+        # tensors; the loss after the final update is computed here with the same function
+        # and samples, outside the tape so nothing extra is recorded.
+        losses = [float(tape.tensors[t].array) for t in loss_ids]
+        losses.append(float(loss_fn(forward(x, path[-1]), y)))
+        with tape:
+            tape.context(
+                "loss_path",
+                np.array(losses),
+                f"Exact loss at each visited parameter set: before training, then after "
+                f"each of the {len(losses) - 1} update(s). Same loss function and the same "
+                f"{mode['n_samples']} sample(s) as the trace; the last value is evaluated "
+                "after the final update.",
+            )
+            if isinstance(model, Model):
+                model.record_path(x, y, path, losses)
 
     return tape.to_trace(
         kind=kind,

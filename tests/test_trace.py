@@ -181,6 +181,7 @@ def test_context_tensors_validate_and_carry_note():
         "loss_landscape",
         "loss_landscape_w1",
         "loss_landscape_w2",
+        "loss_path",
     }
     assert ctx["dataset_X"].shape == (120, 2) and "orientation" in ctx["dataset_X"].note
     assert ctx["loss_landscape"].shape == (41, 41)
@@ -221,3 +222,69 @@ def test_loss_landscape_matches_direct_evaluation(features):
         b = np.array([b0]) if features == 2 else np.array([a1[j]])
         direct = ops.bce(ops.sigmoid(ops.linear(x, w, b)), y)
         assert ctx["loss_landscape"][i, j] == pytest.approx(float(direct), rel=1e-9)
+
+
+@pytest.mark.parametrize("samples", ["single", "batch"])
+def test_loss_path_is_exact_and_window_follows_the_path(samples):
+    from nvzlab import ops
+
+    tr = nvz.trace("logistic_regression", kind="train", samples=samples, iterations=3)
+    assert tr.meta["lr"] == nvz.models.load("logistic_regression").default_lr == 0.5
+    ctx = {t.name: t.array for t in tr.tensors.values() if t.role == "context"}
+    x = next(t.array for t in tr.tensors.values() if t.name == "x")
+    y = next(t.array for t in tr.tensors.values() if t.name == "y")
+    # The visited parameter sets: initial, then the `after` of every update.
+    first: dict = {}
+    for t in tr.tensors.values():
+        if t.role == "param":
+            first.setdefault(t.name, t.array)
+    path = [(first["w"], first["b"])]
+    for e in tr.events:
+        if e.kind == "sgd_update" and e.payload["param"] == "w":
+            b_ev = next(
+                ev
+                for ev in tr.events
+                if ev.kind == "sgd_update" and ev.step == e.step and ev.payload["param"] == "b"
+            )
+            path.append(
+                (tr.tensors[e.payload["after"]].array, tr.tensors[b_ev.payload["after"]].array)
+            )
+    assert len(path) == 4 and ctx["loss_path"].shape == (4,)
+    direct = [float(ops.bce(ops.sigmoid(ops.linear(x, w, b)), y)) for w, b in path]
+    np.testing.assert_allclose(ctx["loss_path"], direct, rtol=1e-6)
+    recorded = [float(t.array) for t in tr.tensors.values() if t.role == "loss"]
+    np.testing.assert_allclose(ctx["loss_path"][:3], recorded, rtol=1e-6)
+    assert all(a > b for a, b in zip(direct, direct[1:], strict=False)), direct  # downhill
+    # Window: centred on the path, half-width max(3 × extent, 0.25) per axis.
+    coords = np.array([[w[0], w[1]] for w, _ in path])
+    lo, hi = coords.min(axis=0), coords.max(axis=0)
+    half = np.maximum(3 * (hi - lo), 0.25)
+    for k, name in enumerate(("w1", "w2")):
+        g = ctx[f"loss_landscape_{name}"]
+        assert g[0] == pytest.approx((lo[k] + hi[k]) / 2 - half[k])
+        assert g[-1] == pytest.approx((lo[k] + hi[k]) / 2 + half[k])
+    note = next(t.note for t in tr.tensors.values() if t.name == "loss_landscape")
+    assert "Window centred on the training path" in note and "w1 in [" in note
+
+
+def test_user_lr_wins_over_default_and_functions_default_to_0_1():
+    tr = nvz.trace("logistic_regression", kind="train", lr=0.05)
+    assert tr.meta["lr"] == 0.05
+    import numpy as np
+
+    from nvzlab import ops
+
+    def model(x, p):
+        return ops.sigmoid(ops.linear(x, p["w"], p["b"]))
+
+    tr = nvz.trace(
+        model,
+        np.array([[1.0, 2.0]]),
+        np.array([1.0]),
+        params={"w": np.zeros(2), "b": np.zeros(1)},
+        kind="train",
+        loss="bce",
+    )
+    assert tr.meta["lr"] == 0.1
+    ctx = {t.name: t.array for t in tr.tensors.values() if t.role == "context"}
+    assert ctx["loss_path"].shape == (2,) and ctx["loss_path"][1] < ctx["loss_path"][0]

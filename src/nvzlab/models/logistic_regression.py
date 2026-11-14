@@ -13,6 +13,7 @@ from nvzlab.models.base import Model
 from nvzlab.ops.losses import EPS
 
 LOSS_GRID = 41
+MIN_HALF_WIDTH = 0.25
 
 
 class LogisticRegression(Model):
@@ -22,6 +23,7 @@ class LogisticRegression(Model):
     family = "linear"
     supports = {"samples": ("single", "batch"), "features": (1, 2)}
     loss = "bce"
+    default_lr = 0.5  # three default iterations travel visibly downhill (see tests)
 
     def __init__(self, features: int = 2) -> None:
         self.check_option("features", features)
@@ -68,31 +70,50 @@ class LogisticRegression(Model):
             "computed in this trace.",
         )
         context("dataset_y", ds.y, "Labels of the whole blobs dataset (0 or 1).")
-        if kind != "train" or y is None:
-            return
-        w, b = p["w"], p["b"]
+
+    def record_path(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        path: list[dict[str, np.ndarray]],
+        losses: list[float],
+    ) -> None:
+        """Loss landscape: mean BCE on a grid around the training path (two parameters vary,
+        the rest stay at their initial values). The window is centred on the path with a
+        half-width of max(3 × path extent, 0.25) per axis."""
+        p0 = path[0]
         if self.features == 2:
-            axes = (("w1", float(w[0])), ("w2", float(w[1])))
-            fixed = f"b fixed at its initial value {float(b[0]):.4g}"
+            names = ("w1", "w2")
+            coords = np.array([[float(p["w"][0]), float(p["w"][1])] for p in path])
+            fixed = f"b fixed at its initial value {float(p0['b'][0]):.4g}"
         else:
-            axes = (("w", float(w[0])), ("b", float(b[0])))
+            names = ("w", "b")
+            coords = np.array([[float(p["w"][0]), float(p["b"][0])] for p in path])
             fixed = "nothing else is held fixed (w and b are the only parameters)"
-        grid = [np.linspace(c - 1.0, c + 1.0, LOSS_GRID) for _, c in axes]
+        lo, hi = coords.min(axis=0), coords.max(axis=0)
+        centre, half = (lo + hi) / 2, np.maximum(3.0 * (hi - lo), MIN_HALF_WIDTH)
+        grid = [np.linspace(c - h, c + h, LOSS_GRID) for c, h in zip(centre, half, strict=True)]
         a0, a1 = np.meshgrid(grid[0], grid[1], indexing="ij")
         if self.features == 2:
-            z = x[:, 0, None, None] * a0 + x[:, 1, None, None] * a1 + b[0]
+            z = x[:, 0, None, None] * a0 + x[:, 1, None, None] * a1 + p0["b"][0]
         else:
             z = x[:, 0, None, None] * a0 + a1
         pc = np.clip(1.0 / (1.0 + np.exp(-z)), EPS, 1.0 - EPS)
         yy = y[:, None, None]
         loss = -np.mean(yy * np.log(pc) + (1.0 - yy) * np.log1p(-pc), axis=0)
         n = x.shape[0]
+        window = ", ".join(
+            f"{nm} in [{c - h:.4g}, {c + h:.4g}]"
+            for nm, c, h in zip(names, centre, half, strict=True)
+        )
         context(
             "loss_landscape",
             loss,
-            f"Mean binary cross-entropy over the {n} sample(s) of this trace, evaluated on a "
-            f"{LOSS_GRID}×{LOSS_GRID} grid of ({axes[0][0]}, {axes[1][0]}) with {fixed}. "
-            "Real computed values; the training path moves across this surface.",
+            f"Mean binary cross-entropy over the {n} sample(s) of this trace on a "
+            f"{LOSS_GRID}×{LOSS_GRID} grid of ({names[0]}, {names[1]}) with {fixed}. Window "
+            f"centred on the training path, half-width max(3 × path extent, {MIN_HALF_WIDTH}): "
+            f"{window}. Real computed values; path and marker heights are the exact losses "
+            f"in loss_path, not grid interpolations.",
         )
-        for (name, _), g in zip(axes, grid, strict=True):
+        for name, g in zip(names, grid, strict=True):
             context(f"loss_landscape_{name}", g, f"Grid values of {name} for loss_landscape.")
