@@ -30,4 +30,8 @@ x = np.array([[1.0, 2.0], [-1.0, 0.5]])
 nvz.trace(opaque_model, x, np.array([1.0, 0.0]), params=params, kind="train", loss="bce").save(
     out / "opaque.html"
 )
+nvz.trace("mlp").save(out / "mlp-predict.html")
+nvz.trace("mlp", kind="train", samples="batch").save(out / "mlp-train-batch.html")
+nvz.trace("decision_tree").save(out / "tree-predict.html")
+nvz.trace("decision_tree", kind="train", iterations=3).save(out / "tree-train.html")
 print(sorted(p.name for p in out.iterdir()))

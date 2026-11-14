@@ -104,11 +104,16 @@ class Tape:
     def context(self, name: str, arr: Any, note: str) -> str:
         """Record ``arr`` as a context tensor (shown for orientation, not computed).
 
-        Recording the same ``name`` again (e.g. once per training iteration) is a no-op.
+        Recording the same ``name`` again (e.g. once per training iteration) is a no-op, and
+        so is an array the tape already holds (e.g. a dataset that is also the traced ``x``):
+        that tensor keeps its own name and role.
         """
         for tid, t in self.tensors.items():
             if t.role == "context" and t.name == name:
                 return tid
+        seen = self.tensor_id(arr)
+        if seen is not None:
+            return seen
         tid = self.watch(np.asarray(arr, dtype=np.float64), role="context", name=name)
         self.tensors[tid].note = note
         return tid

@@ -15,7 +15,7 @@ import numpy as np
 
 from nvzlab import datasets, ops
 from nvzlab.core.errors import NvzError
-from nvzlab.core.tape import event, step
+from nvzlab.core.tape import context, event, step
 from nvzlab.models.base import Model
 
 MAX_DEPTH = 3
@@ -306,6 +306,19 @@ class DecisionTree(Model):
                 self.params = {k: z[k] for k in ARRAYS}
         for p in self.params.values():
             p.setflags(write=False)
+
+    def record_context(
+        self, x: np.ndarray, y: np.ndarray | None, p: dict[str, np.ndarray], kind: str
+    ) -> None:
+        ds = self.dataset
+        what = "the data the tree is grown on" if kind == "train" else "for orientation"
+        context(
+            "dataset_X",
+            ds.X,
+            f"The whole {ds.name} dataset, {what}. Feature-space plots draw the leaf regions "
+            "over it.",
+        )
+        context("dataset_y", ds.y, f"Labels of the whole {ds.name} dataset (0 or 1).")
 
     def forward(self, x: np.ndarray, p: dict[str, np.ndarray]) -> np.ndarray:
         if x.ndim != 2 or x.shape[1] != self.features:

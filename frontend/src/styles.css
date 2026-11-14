@@ -270,3 +270,44 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .nvz-capture .nvz-mlp-scene { flex: 1; min-height: 0; grid-template-columns: 1fr 1fr; align-items: stretch; }
 .nvz-capture-vertical .nvz-mlp-scene { grid-template-columns: 1fr; }
 .nvz-capture .nvz-neuron-value { font-size: 8px; }
+
+/* Decision tree scenes */
+.nvz-tree-scene { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+.nvz-plot-first .nvz-flow > .nvz-tree-scene { max-width: 1400px; }
+.nvz-side .nvz-tree-scene { grid-template-columns: 1fr; }
+.nvz-tree-node rect { fill: var(--panel); stroke: var(--border); stroke-width: 1.5; }
+.nvz-tree-node.leaf rect { stroke-dasharray: none; fill: color-mix(in srgb, var(--muted) 8%, var(--panel)); }
+.nvz-tree-node.pending rect { stroke-dasharray: 4 3; }
+.nvz-tree-node.lit rect { stroke: var(--accent); stroke-width: 2.5; }
+.nvz-tree-node.current rect { fill: color-mix(in srgb, var(--accent) 14%, var(--panel)); stroke: var(--accent); stroke-width: 3; }
+.nvz-tree-node.new rect { stroke: var(--update); stroke-width: 2.5; }
+.nvz-tree-node { cursor: pointer; }
+.nvz-tree-rule { font-family: var(--mono); font-size: 10px; fill: var(--fg); }
+.nvz-tree-edge { stroke: var(--border); stroke-width: 1.5; }
+.nvz-tree-edge.lit { stroke: var(--accent); stroke-width: 3; }
+.nvz-tree-edge.new { stroke: var(--update); stroke-width: 2.5; }
+.nvz-count-0 { fill: var(--pt0); }
+.nvz-count-1 { fill: var(--pt1); }
+.nvz-scene-legend i.nvz-tree-lit { background: var(--accent); }
+.nvz-split-line polyline { fill: none; stroke-width: 1.8; }
+.nvz-split-f0 polyline, .nvz-split-f0 circle, i.nvz-split-swatch.nvz-split-f0 { stroke: var(--accent); fill: var(--accent); background: var(--accent); }
+.nvz-split-f0 polyline { fill: none; }
+.nvz-split-f1 polyline, .nvz-split-f1 circle, i.nvz-split-swatch.nvz-split-f1 { stroke: var(--loss); fill: var(--loss); background: var(--loss); }
+.nvz-split-f1 polyline { fill: none; }
+.nvz-split-chosen circle { fill: none; stroke: var(--fg); stroke-width: 2.5; }
+.nvz-scene-legend i.nvz-split-ring { background: none; border: 2px solid var(--fg); }
+.nvz-split-formula { margin-top: 10px; font-size: 14px; }
+.nvz-split-formula .nvz-formula { margin: 4px 0; }
+.nvz-split-formula p { margin: 4px 0; max-width: 70ch; }
+.nvz-region-0 { fill: var(--pt0); }
+.nvz-region-1 { fill: var(--pt1); }
+.nvz-region.hot { stroke: var(--accent); stroke-width: 2; }
+.nvz-scene-legend i.nvz-region-swatch { border-radius: 2px; opacity: 0.4; }
+.nvz-scene-legend i.nvz-region-0 { background: var(--pt0); }
+.nvz-scene-legend i.nvz-region-1 { background: var(--pt1); }
+.nvz-split-rule { stroke: var(--fg); stroke-width: 2; }
+.nvz-split-rule.hot { stroke: var(--accent); stroke-width: 3.5; }
+.nvz-pt-data { stroke-width: 1; opacity: 0.85; }
+.nvz-capture .nvz-tree-rule { font-size: 9px; }
+.nvz-capture .nvz-split-formula { font-size: 24px; }
+.nvz-capture .nvz-split-formula p { max-width: none; }

@@ -5,6 +5,7 @@ import { useAppState, useDispatch } from "../../state/store";
 import { fmt } from "../../format";
 import { flatIndex, unflatIndex } from "../../trace/load";
 import { mlpView, probGridAt } from "../mlp";
+import { dataBounds, regions, rule, treeAt } from "../tree";
 import { NEG_RGB, POS_RGB } from "../../format";
 import { Axes, Label, SIZE, Surface, bilinear, cellColor, orbitPosition, span, useTheme } from "./common";
 
@@ -422,6 +423,86 @@ export function TensorStack() {
   );
 }
 
+/**
+ * Decision tree in feature space: one box per leaf (or not-yet-split node). Footprint = the
+ * region's bounds, height and colour = predicted probability of class 1 at that node;
+ * dataset points on the floor.
+ */
+export function RegionsScene() {
+  const { trace, stepIndex, sampleIndex, selection } = useAppState();
+  const dispatch = useDispatch();
+  const theme = useTheme();
+  const tree = treeAt(trace, stepIndex);
+  const bounds = dataBounds(trace);
+  const x = trace.byRole("input", "x");
+  const y = trace.byRole("label");
+  const isTrain = trace.raw.kind === "train";
+  const ctxX = trace.context("dataset_X") ?? (isTrain ? x : null); // train: the dataset is x itself
+  const ctxY = trace.context("dataset_y") ?? (isTrain ? y : null);
+  if (!tree || !bounds) return null;
+  const nf = bounds.length;
+  const names = trace.raw.dataset?.features ?? ["x1", "x2"];
+  const [lo1, hi1] = bounds[0];
+  const [lo2, hi2] = nf > 1 ? bounds[1] : [0, 1];
+  const s1 = span(lo1, hi1);
+  const s2 = span(lo2, hi2);
+  const sy = (p: number) => Math.max(0.02, p * (SIZE / 2)); // same scale as the Axes y range 0..1
+  const regs = regions(tree, bounds);
+  const splitting = tree.split?.node ?? null;
+  const path = tree.paths[sampleIndex] ?? [];
+  const here = path.length ? path[path.length - 1] : null;
+  const traced = isTrain ? 0 : trace.raw.mode.n_samples;
+  const cls = (l: number | null | undefined) => (l === null || l === undefined ? theme.muted : l > 0.5 ? theme.pt1 : theme.pt0);
+  const selRow = x && selection.tensorId === x.id && selection.index ? selection.index[0] : -1;
+  return (
+    <group position={[0, -SIZE / 4, 0]}>
+      <Axes x={{ name: names[0], lo: lo1, hi: hi1 }} z={{ name: nf > 1 ? names[1] : "", lo: lo2, hi: hi2 }} y={{ name: "p(class 1)", lo: 0, hi: 1 }} colors={theme} />
+      {regs.map(({ node, bounds: b }) => {
+        const w = s1(b[0][1]) - s1(b[0][0]);
+        const d = nf > 1 ? s2(b[1][1]) - s2(b[1][0]) : SIZE;
+        const p1 = node.n_samples ? (node.counts[1] ?? 0) / node.n_samples : 0; // probability of class 1
+        const hgt = sy(p1);
+        const cx = (s1(b[0][0]) + s1(b[0][1])) / 2;
+        const cz = nf > 1 ? (s2(b[1][0]) + s2(b[1][1])) / 2 : 0;
+        const hot = node.id === splitting || node.id === here;
+        const colour = theme.pt0.clone().lerp(theme.pt1, p1).lerp(theme.panel, 0.3);
+        return (
+          <group key={node.id}>
+            <mesh position={[cx, hgt / 2, cz]} onClick={(e) => { e.stopPropagation(); if (x) dispatch({ type: "select", selection: { tensorId: x.id, index: [sampleIndex, 0] } }); }}>
+              <boxGeometry args={[Math.max(0.01, w - 0.02), hgt, Math.max(0.01, d - 0.02)]} />
+              <meshStandardMaterial color={colour} transparent opacity={node.pending ? 0.25 : 0.45} depthWrite={false} emissive={hot ? theme.accent : new THREE.Color(0)} emissiveIntensity={0.35} />
+            </mesh>
+            <Line points={[[cx - w / 2, hgt, cz - d / 2], [cx + w / 2, hgt, cz - d / 2], [cx + w / 2, hgt, cz + d / 2], [cx - w / 2, hgt, cz + d / 2], [cx - w / 2, hgt, cz - d / 2]]} color={hot ? theme.accent : theme.fg} lineWidth={hot ? 2.5 : 1} transparent opacity={0.7} />
+            <Label at={[cx, hgt + 0.22, cz]} muted={!hot}>{`node ${node.id}: p₁ = ${fmt(p1)}${node.feature !== null ? ` · ${rule(node)}` : ""}`}</Label>
+          </group>
+        );
+      })}
+      {ctxX?.values &&
+        Array.from({ length: ctxX.shape[0] }, (_, k) => (
+          <mesh key={k} position={[s1(ctxX.values![k * nf]), 0.03, nf > 1 ? s2(ctxX.values![k * nf + 1]) : ((ctxY?.values?.[k] ?? 0.5) - 0.5) * 2]}>
+            <sphereGeometry args={[traced ? 0.035 : 0.05, 8, 8]} />
+            <meshStandardMaterial color={cls(ctxY?.values?.[k])} transparent opacity={traced ? 0.35 : 0.8} />
+          </mesh>
+        ))}
+      {x?.values &&
+        Array.from({ length: traced }, (_, i) => {
+          const current = i === sampleIndex;
+          const px = s1(x.values![i * nf]);
+          const pz = nf > 1 ? s2(x.values![i * nf + 1]) : ((y?.values?.[i] ?? 0.5) - 0.5) * 2;
+          return (
+            <group key={i}>
+              <mesh position={[px, 0.08, pz]} onClick={(e) => { e.stopPropagation(); dispatch({ type: "sample", index: i }); dispatch({ type: "select", selection: { tensorId: x.id, index: [i, 0] } }); }}>
+                <sphereGeometry args={[current ? 0.11 : 0.08, 16, 16]} />
+                <meshStandardMaterial color={cls(y?.values?.[i])} emissive={i === selRow ? theme.sel : current ? theme.fg : new THREE.Color(0)} emissiveIntensity={0.5} />
+              </mesh>
+              {current && <Label at={[px, 0.4, pz]}>{`sample ${i}`}</Label>}
+            </group>
+          );
+        })}
+    </group>
+  );
+}
+
 /** Scenes available for a trace, in preference order for the current step. */
 export function availableScenes(trace: ReturnType<typeof useAppState>["trace"], stepIndex: number): SceneDef[] {
   const out: SceneDef[] = [];
@@ -441,12 +522,18 @@ export function availableScenes(trace: ReturnType<typeof useAppState>["trace"], 
     out.push({ id: "network", title: "Network", camera: orbitPosition(28, 20, 1), render: () => <NetworkScene /> });
     if (probGridAt(trace, 0)) out.push({ id: "surface", title: "Probability surface", camera: DEFAULT_CAMERA, render: () => <ProbabilitySurface /> });
   }
+  if (trace.raw.model.family === "tree" && treeAt(trace, trace.steps.length - 1)) {
+    out.push({ id: "regions", title: "Leaf regions", camera: orbitPosition(50, 40, 1), render: () => <RegionsScene /> });
+  }
   out.push({ id: "tensors", title: "Tensor stack", camera: DEFAULT_CAMERA, render: () => <TensorStack /> });
   return out;
 }
 
 /** The honest mapping caption for a scene. */
 export function sceneCaption(id: SceneId, trace: ReturnType<typeof useAppState>["trace"]): string {
+  if (id === "regions") {
+    return "One box per leaf region (dashed-looking, faded boxes: nodes created but not split yet). Footprint = the region's bounds in feature space (the data range plus 0.5 on each side), height = predicted probability of class 1 at that node = count₁ / n, colour: class-0 hue at 0 to class-1 hue at 1. Floor dots: the dataset (colour = label). Highlighted box: the node being split (train) or the node the current sample is in (predict).";
+  }
   if (id === "network") {
     return "Spheres = neurons, one row per layer (input, hidden, output), colour = the value for the selected sample on the diverging scale (blue positive, orange negative, per layer); dim spheres are layers not computed yet at this step. Lines = weights: blue positive, orange negative, thickness and opacity ∝ |weight|; on backward steps they show ∂L/∂W instead once computed. Click a sphere or a line to select the value.";
   }

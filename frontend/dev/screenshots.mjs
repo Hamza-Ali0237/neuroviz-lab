@@ -1,7 +1,7 @@
 // Dev-only visual check: open exported viewer pages, drive them and screenshot.
 // Usage: npm run screenshots -- <pages-dir> <out-dir>
 // Expects pages written by frontend/dev/make_pages.py: lr-predict-f2.html, lr-train-batch-f2.html,
-// opaque.html. Fails if any page logs a console error.
+// opaque.html, mlp-predict.html, mlp-train-batch.html, tree-predict.html, tree-train.html. Fails if any page logs a console error.
 // Headless WebGL: Chrome with --use-angle=swiftshader --enable-unsafe-swiftshader.
 import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
@@ -75,6 +75,40 @@ for (const [w, h] of SIZES) {
     await gotoStep(page, 1);
     await to3d(page);
     await shot(page, "e-opaque-3d-tensors", w, h, theme);
+    await page.close();
+
+    // (f) MLP predict, softmax step, 2D network diagram + decision regions; (g) 3D network.
+    page = await open("mlp-predict.html", w, h, theme);
+    await gotoStep(page, 4);
+    await shot(page, "f-mlp-predict-softmax-2d-network", w, h, theme);
+    await to3d(page);
+    await shot(page, "g-mlp-predict-3d-network", w, h, theme);
+    await page.locator(".nvz-3d-tools select").selectOption("surface");
+    await page.waitForTimeout(600);
+    await shot(page, "h-mlp-predict-3d-surface", w, h, theme);
+    await page.close();
+
+    // (i) MLP train, gradients reach W1: edges show gradients.
+    page = await open("mlp-train-batch.html", w, h, theme);
+    await gotoStep(page, 11);
+    await shot(page, "i-mlp-train-backward-2d-gradients", w, h, theme);
+    await page.close();
+
+    // (j) tree predict, third node test: path highlighted; (k) 3D leaf regions.
+    page = await open("tree-predict.html", w, h, theme);
+    await gotoStep(page, 3);
+    await shot(page, "j-tree-predict-path-2d", w, h, theme);
+    await to3d(page);
+    await shot(page, "k-tree-predict-3d-regions", w, h, theme);
+    await page.close();
+
+    // (l) tree train, root split search; (m) a deeper split with the partition grown.
+    page = await open("tree-train.html", w, h, theme);
+    await shot(page, "l-tree-train-root-split-2d", w, h, theme);
+    await gotoStep(page, 5);
+    await shot(page, "m-tree-train-split5-2d", w, h, theme);
+    await to3d(page);
+    await shot(page, "n-tree-train-3d-regions", w, h, theme);
     await page.close();
   }
   console.log(`done ${w}x${h}`);

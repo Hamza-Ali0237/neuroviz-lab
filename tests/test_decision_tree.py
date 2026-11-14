@@ -238,3 +238,18 @@ def test_split_chosen_event_is_plain_json():
         "node", "candidate", "feature", "feature_name", "threshold", "left_counts",
         "right_counts", "left_impurity", "right_impurity", "weighted_impurity", "gain",
     }  # fmt: skip
+
+
+@pytest.mark.parametrize("kind", ["predict", "train"])
+def test_tree_traces_carry_the_dataset_as_context(kind):
+    tr = nvz.trace("decision_tree", kind=kind)
+    tensors = tr.to_dict()["tensors"].values()
+    ctx = {t["name"]: t for t in tensors if t["role"] == "context"}
+    if kind == "predict":
+        assert set(ctx) == {"dataset_X", "dataset_y"}
+        assert ctx["dataset_X"]["shape"] == [120, 2]
+        assert "leaf regions" in ctx["dataset_X"]["note"]
+    else:  # the tree is grown on the whole dataset, so the dataset is the traced x itself
+        assert set(ctx) == {"dataset_y"}
+        assert [t["shape"] for t in tensors if t["role"] == "input"] == [[120, 2]]
+    assert ctx["dataset_y"]["shape"] == [120]

@@ -6,6 +6,8 @@ import { MatrixView } from "./MatrixView";
 import { OpCard } from "./OpCard";
 import { LRScene } from "./LRScene";
 import { MLPScene } from "./MLPScene";
+import { TreeScene } from "./TreeScene";
+import { treeAt } from "../tree";
 import { mlpView } from "../mlp";
 import { worked } from "./worked";
 
@@ -163,6 +165,7 @@ function ModelScene() {
   const { trace } = useAppState();
   if (trace.raw.model.family === "linear" && [1, 2].includes(trace.raw.mode.n_features)) return <LRScene />;
   if (trace.raw.model.family === "mlp") return <MLPScene />;
+  if (trace.raw.model.family === "tree") return <TreeScene />;
   return null;
 }
 
@@ -170,6 +173,7 @@ function ModelScene() {
 export function hasModelScene(trace: ReturnType<typeof useAppState>["trace"]): boolean {
   if (trace.raw.model.family === "linear") return [1, 2].includes(trace.raw.mode.n_features);
   if (trace.raw.model.family === "mlp") return mlpView(trace, 0, 0) !== null;
+  if (trace.raw.model.family === "tree") return treeAt(trace, trace.steps.length - 1) !== null;
   return false;
 }
 
@@ -189,7 +193,7 @@ export function Scene2D() {
     );
   }
   // Forward steps: the model's plot comes first so it is visible without scrolling.
-  const plotFirst = hasScene && step.phase === "forward";
+  const plotFirst = hasScene && (step.phase === "forward" || trace.raw.model.family === "tree");
   return (
     <div className={`nvz-scene2d ${plotFirst ? "nvz-plot-first" : ""}`}>
       <div className="nvz-flow">
