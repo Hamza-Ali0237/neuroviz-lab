@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, py${{ matrix.python }}${{ matrix.parity && ', parity' || '' }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        parity: [false]
+        include:
+          - os: ubuntu-latest
+            python: "3.12"
+            parity: true
+          - os: macos-latest
+            python: "3.12"
+            parity: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
+      - name: Install CPU PyTorch so the parity tests run instead of skipping
+        if: matrix.parity
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -c "import torch, sklearn; print(torch.__version__, sklearn.__version__)"
+      - run: ruff check .
+      - run: ruff format --check src tests scripts examples
+      - run: pytest -rs
+
+  wheel:
+    name: wheel installs with numpy only
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: twine check dist/*
+      - name: Install the wheel in a clean venv and run the one-liner
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install --quiet dist/*.whl
+          /tmp/clean/bin/pip list
+          cd /tmp
+          /tmp/clean/bin/python -W error -c 'import nvzlab as nvz; nvz.trace("logistic_regression").save("out.html")'
+          test -s /tmp/out.html
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  frontend:
+    name: frontend bundle is up to date
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - name: Fail if the built bundle differs from the committed one
+        run: |
+          if [ -n "$(git status --porcelain ../src/nvzlab/viewer/static)" ]; then
+            git --no-pager diff --stat ../src/nvzlab/viewer/static
+            echo "::error::src/nvzlab/viewer/static is stale: run 'npm run build' in frontend/ and commit the result."
+            exit 1
+          fi
