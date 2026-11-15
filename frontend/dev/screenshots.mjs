@@ -1,7 +1,7 @@
 // Dev-only visual check: open exported viewer pages, drive them and screenshot.
 // Usage: npm run screenshots -- <pages-dir> <out-dir>
 // Expects pages written by frontend/dev/make_pages.py: lr-predict-f2.html, lr-train-batch-f2.html,
-// opaque.html, mlp-predict.html, mlp-train-batch.html, tree-predict.html, tree-train.html. Fails if any page logs a console error.
+// opaque.html, mlp-predict.html, mlp-train-batch.html, tree-predict.html, tree-train.html, cnn-train.html, transformer-train.html. Fails if any page logs a console error.
 // Headless WebGL: Chrome with --use-angle=swiftshader --enable-unsafe-swiftshader.
 import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
@@ -109,6 +109,38 @@ for (const [w, h] of SIZES) {
     await shot(page, "m-tree-train-split5-2d", w, h, theme);
     await to3d(page);
     await shot(page, "n-tree-train-3d-regions", w, h, theme);
+    await page.close();
+
+    // (o) CNN train: convolution worked sum for z[0,0,0,0]; (p) max pool winners; (q) pool backward routing;
+    // (r) 3D convolution stack with the receptive-field box.
+    page = await open("cnn-train.html", w, h, theme);
+    await gotoStep(page, 1);
+    await shot(page, "o-cnn-train-conv-worked-2d", w, h, theme);
+    await gotoStep(page, 3);
+    await shot(page, "p-cnn-train-maxpool-2d", w, h, theme);
+    await gotoStep(page, 13);
+    await shot(page, "q-cnn-train-pool-backward-2d", w, h, theme);
+    await gotoStep(page, 1);
+    await to3d(page);
+    await page.locator(".nvz-3d-tools select").selectOption("conv");
+    await page.waitForTimeout(600);
+    await shot(page, "r-cnn-train-3d-conv", w, h, theme);
+    await page.close();
+
+    // (s) Transformer train: embedding rows; (t) attention map with the second row's worked softmax;
+    // (u) 3D attention bars.
+    page = await open("transformer-train.html", w, h, theme);
+    await gotoStep(page, 1);
+    await shot(page, "s-transformer-train-embedding-2d", w, h, theme);
+    await gotoStep(page, 9);
+    await page.locator(".nvz-attn tbody tr").nth(1).click();
+    await page.waitForTimeout(200);
+    if (!(await page.locator(".nvz-softmax-row").count())) errors.push("t: clicking an attention row did not show its worked softmax");
+    await shot(page, "t-transformer-train-attention-2d", w, h, theme);
+    await to3d(page);
+    await page.locator(".nvz-3d-tools select").selectOption("attention");
+    await page.waitForTimeout(600);
+    await shot(page, "u-transformer-train-3d-attention", w, h, theme);
     await page.close();
   }
   console.log(`done ${w}x${h}`);
