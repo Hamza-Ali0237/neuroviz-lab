@@ -124,4 +124,4 @@ Issues labelled `good first issue` are a reasonable place to start.
 
 ## License
 
-MIT, Hamza Ali.
+MIT, Humza Ali.
