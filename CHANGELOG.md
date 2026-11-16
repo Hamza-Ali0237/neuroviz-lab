@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 - 2026-11-16
+
+### Fixed
+
+- Project links on PyPI (homepage, repository, issues, changelog, roadmap) pointed to the wrong GitHub account.
+- README "What's in v1" and "What's not yet" now match what 0.1.0 ships.
+
 ## 0.1.0 - 2026-11-16
 
 First release.

@@ -8,7 +8,7 @@ must pass, and the two most common contributions: a new op and a new built-in mo
 Python 3.10 or newer. The runtime depends on NumPy only; everything else is a dev extra.
 
 ```bash
-git clone https://github.com/hamzaali/neuroviz-lab
+git clone https://github.com/Hamza-Ali0237/neuroviz-lab
 cd neuroviz-lab
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
@@ -119,7 +119,7 @@ It uses PyPI trusted publishing, so there is no API token to store.
 One-time setup (maintainer):
 
 1. On PyPI, open *Your account → Publishing* and add a pending publisher for the project
-   `neuroviz-lab`: owner `hamzaali`, repository `neuroviz-lab`, workflow `release.yml`,
+   `neuroviz-lab`: owner `Hamza-Ali0237`, repository `neuroviz-lab`, workflow `release.yml`,
    environment `pypi`. After the first release it becomes a regular trusted publisher.
 2. On GitHub, *Settings → Environments → New environment* named `pypi`. Optionally require a
    reviewer there so every publish needs a click.

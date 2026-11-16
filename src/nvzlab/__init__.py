@@ -7,7 +7,7 @@ Examples
 >>> tr.save("run.json")  # doctest: +SKIP
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 from nvzlab import datasets, models, ops, viewer  # noqa: E402
 from nvzlab.api import show, trace  # noqa: E402

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "neuroviz-lab"
-version = "0.1.0"
+version = "0.1.1"
 description = "See inside the model: run small ML models step by step and watch the forward pass, loss, backward pass and update as interactive 2D and 3D views."
 readme = { file = "README.md", content-type = "text/markdown" }
 license = "MIT"
@@ -55,11 +55,11 @@ dev = [
 nvzlab = "nvzlab.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/hamzaali/neuroviz-lab"
-Repository = "https://github.com/hamzaali/neuroviz-lab"
-Issues = "https://github.com/hamzaali/neuroviz-lab/issues"
-Changelog = "https://github.com/hamzaali/neuroviz-lab/blob/main/CHANGELOG.md"
-Roadmap = "https://github.com/hamzaali/neuroviz-lab/blob/main/ROADMAP.md"
+Homepage = "https://github.com/Hamza-Ali0237/neuroviz-lab"
+Repository = "https://github.com/Hamza-Ali0237/neuroviz-lab"
+Issues = "https://github.com/Hamza-Ali0237/neuroviz-lab/issues"
+Changelog = "https://github.com/Hamza-Ali0237/neuroviz-lab/blob/main/CHANGELOG.md"
+Roadmap = "https://github.com/Hamza-Ali0237/neuroviz-lab/blob/main/ROADMAP.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/nvzlab"]
