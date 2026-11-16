@@ -2,7 +2,7 @@
 
 **See inside the model.**
 
-<!-- TODO: demo GIF URL (hosted outside the repo, e.g. a GitHub release asset) -->
+![neuroviz-lab demo](https://github.com/user-attachments/assets/21ce3c06-9e13-4526-a380-d81d79421b0d)
 
 neuroviz-lab runs a small machine-learning model one step at a time and shows what
 happens to the data: the forward pass, the loss, the backward pass and the parameter

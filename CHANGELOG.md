@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 - TODO: release date (YYYY-MM-DD)
+## 0.1.0 - 2026-11-16
 
 First release.
 
