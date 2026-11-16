@@ -57,9 +57,14 @@ Also in v1:
 - `trace.save("run.html")` writes one self-contained page; `nvzlab demo <model>` does it
   from the terminal.
 - Scenes that move with the numbers: the logistic-regression decision boundary or sigmoid
-  curve plus its loss landscape in 3D, the MLP network diagram with activations, weights
-  and gradients and its decision regions, and the decision tree's partition of the plane
-  with every candidate split.
+  curve plus its loss landscape in 3D; the MLP network diagram with activations, weights
+  and gradients and its decision regions; the decision tree's path, its partition of the
+  plane and the split search over every candidate threshold; the CNN's input image,
+  feature maps, max-pool routing and receptive field in 3D; and the Transformer's attention
+  heat map with token labels, in 2D and as 3D bars.
+- Worked arithmetic with the real values for every built-in op: click a cell to see how it
+  was computed, from a weighted sum to the 27-term convolution sum, a softmax row or a
+  layer norm.
 - Capture mode for screen recording (`capture="square"` or `"vertical"`): controls hidden,
   a fixed 1080×1080 or 1080×1920 viewport, larger type, looping auto-play.
 - Every op carries a plain-language explanation and a formula for both directions, and
@@ -67,15 +72,13 @@ Also in v1:
 
 ## What's not yet
 
-- No dedicated scenes for `cnn` and `transformer` yet: they show the step list, the
-  tensors as tinted matrices (the attention weights included) and the op cards, but no
-  image view and no attention heat-map picture.
-- No worked-arithmetic cards for `conv2d`, `maxpool2d`, `layernorm` or attention in the
-  viewer: those ops show their formula, shapes and values, not a per-cell derivation.
-- 4-D tensors render as flattened grids.
 - Multi-head attention (`heads=2`) is not built in.
-- No PyTorch, TensorFlow or JAX adapters, no uploading your own data, no editing the
-  built-in datasets.
+- No framework adapters yet (PyTorch, TensorFlow, JAX): your own models are NumPy
+  functions built from `nvz.ops`.
+- `nvz.show()` in Jupyter embeds the whole viewer (about 1.8 MB) in each output cell;
+  a widget that loads it once is planned.
+- No data or image upload in the viewer, and the built-in datasets are read-only. Your
+  own NumPy arrays work with your own models: `nvz.trace(my_model, x, y, params=...)`.
 
 ## What's next
 
