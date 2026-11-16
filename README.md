@@ -62,13 +62,15 @@ Also in v1:
   plane and the split search over every candidate threshold; the CNN's input image,
   feature maps, max-pool routing and receptive field in 3D; and the Transformer's attention
   heat map with token labels, in 2D and as 3D bars.
-- Worked arithmetic with the real values for every built-in op: click a cell to see how it
-  was computed, from a weighted sum to the 27-term convolution sum, a softmax row or a
-  layer norm.
+- Worked arithmetic with the real values: click a cell to see how it was computed, from a
+  weighted sum to the 27-term convolution sum, a softmax row or a layer norm, plus each
+  parameter update. Not every op has a rule yet (`cross_entropy`, `nll`, `tree_predict`
+  and the backward passes of `conv2d`, `layernorm` and `embedding` show values only).
 - Capture mode for screen recording (`capture="square"` or `"vertical"`): controls hidden,
   a fixed 1080×1080 or 1080×1920 viewport, larger type, looping auto-play.
-- Every op carries a plain-language explanation and a formula for both directions, and
-  errors say what was expected, what was received and how to fix it.
+- Every built-in op carries a plain-language explanation and a formula (a backward one too,
+  except `tree_predict`, which is not differentiable), and errors say what was expected,
+  what was received and how to fix it.
 
 ## What's not yet
 

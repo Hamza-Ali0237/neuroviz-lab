@@ -79,7 +79,7 @@ Checklist:
    leave `formula` and `text` out and the op is shown as opaque; never invent text.
 5. An op that must store extra data for the viewer (for example which position won a
    max pool) subclasses `nvz.Op` and returns it from `node_attrs(ctx)`.
-6. Add a line to `CHANGELOG.md` under "Unreleased".
+6. Add a line to `CHANGELOG.md` under the version being prepared (add an "Unreleased" heading if none exists).
 
 ## Adding a built-in model
 

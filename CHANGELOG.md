@@ -42,11 +42,14 @@ First release.
 - 3D renderer (three.js): probability surface and loss landscape with the training path for logistic regression, and a generic tensor stack for every model; shares step, selection and sample with 2D; reset view; disabled with a reason when WebGL is unavailable.
 - MLP scenes: network diagram with the real activations and weights (or gradients in the backward phase), decision regions from recorded probability grids, 3D network and surface.
 - Decision-tree scenes: the partition of the plane and the split search, in 2D.
+- CNN scenes: the input image, each filter's feature map and the max-pooled map in 2D; in 3D the image planes, output feature maps and the receptive-field box behind the selected cell.
+- Transformer scenes: an attention heat map with token labels in 2D, and token-by-token bars in 3D.
+- Worked arithmetic for `layernorm`, `embedding`, `scale`, `transpose`, `conv2d`, `maxpool2d` and `flatten` forward cells, and for the backward cells of most ops, beside the existing linear, activation, softmax and loss cases.
 - Capture mode for screen recording: `trace.save("x.html", capture="square")`, `nvz.show(..., capture="vertical")` or a URL flag; controls hidden, fixed 1080×1080 or 1080×1920 viewport, larger type, auto-play that loops.
 - Built-ins carry a `display_name` ("Logistic Regression", "MLP", "Decision Tree", "CNN", "Transformer") used as the trace title; `run_id` keeps the registry name. User models keep their function or class name.
 - The MLP default sample is chosen by rule: the first `moons` row (first 4 rows for `samples="batch"`) that the pretrained weights classify correctly and that activates at least 2 of the 4 hidden units, so the network diagram never shows a dead layer.
 - Update steps of models with more than 4 parameter arrays are titled "Update all parameters (N arrays)"; the step's first event lists every array.
-- GitHub Actions: tests on Python 3.10 to 3.13 (Linux and macOS, one job with CPU PyTorch for the parity tests), a wheel smoke test in a clean venv, a frontend bundle freshness check, and a tag-triggered release workflow that publishes to PyPI with trusted publishing.
+- GitHub Actions: tests on Python 3.10 to 3.13 on Linux plus Python 3.12 on macOS (one Linux job with CPU PyTorch for the parity tests), a wheel smoke test in a clean venv, a frontend bundle freshness check, and a tag-triggered release workflow that publishes to PyPI with trusted publishing.
 
 ### Changed
 
